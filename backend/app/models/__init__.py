@@ -5,6 +5,30 @@ Alembic autogenerate 가 이 파일만 보므로, 새 모델 파일을 만들면
 from app.models.alert import Alert, AlertDelivery
 from app.models.base import Base
 from app.models.price import Offer, PriceSnapshot
+from app.models.source import (
+    AppSetting,
+    CallBudget,
+    CoverageCell,
+    FxRate,
+    Place,
+    ProbeLog,
+    SourceHealth,
+)
 from app.models.watch import Watch, WatchRun
 
-__all__ = ["Base", "Watch", "WatchRun", "Offer", "PriceSnapshot", "Alert", "AlertDelivery"]
+__all__ = [
+    "Base",
+    "Watch",
+    "WatchRun",
+    "Offer",
+    "PriceSnapshot",
+    "Alert",
+    "AlertDelivery",
+    "CallBudget",
+    "CoverageCell",
+    "ProbeLog",
+    "AppSetting",
+    "SourceHealth",
+    "FxRate",
+    "Place",
+]

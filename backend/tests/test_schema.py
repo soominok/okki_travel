@@ -2,6 +2,7 @@
 모델 정의가 아니라 DB에 실제로 뭐가 생겼는지를 본다.
 """
 
+import pytest
 from sqlalchemy import inspect, text
 
 
@@ -244,3 +245,35 @@ async def test_alerts_dedup_lookup_index_exists(migrated_engine):
     async with migrated_engine.connect() as conn:
         idx = await conn.run_sync(lambda c: inspect(c).get_indexes("alerts"))
     assert any(i["column_names"][:2] == ["dedup_key", "created_at"] for i in idx), idx
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "call_budgets",
+        "coverage_cells",
+        "probe_log",
+        "app_settings",
+        "source_health",
+        "fx_rates",
+        "places",
+    ],
+)
+async def test_source_layer_tables_exist(migrated_engine, table):
+    async with migrated_engine.connect() as conn:
+        names = await conn.run_sync(lambda c: inspect(c).get_table_names())
+    assert table in names
+
+
+async def test_call_budget_pk_is_source_and_period(migrated_engine):
+    """월별 예산. Bright Data 는 매월 1일 갱신된다."""
+    async with migrated_engine.connect() as conn:
+        pk = await conn.run_sync(lambda c: inspect(c).get_pk_constraint("call_budgets"))
+    assert sorted(pk["constrained_columns"]) == ["period_start", "source"]
+
+
+async def test_coverage_cell_pk_is_watch_date_nights(migrated_engine):
+    """탐색 공간 한 칸 = (watch, 출발일, 체류일수)."""
+    async with migrated_engine.connect() as conn:
+        pk = await conn.run_sync(lambda c: inspect(c).get_pk_constraint("coverage_cells"))
+    assert sorted(pk["constrained_columns"]) == ["depart_date", "nights", "watch_id"]
