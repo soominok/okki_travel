@@ -269,7 +269,9 @@ alert_deliveries (
   id         uuid pk,
   alert_id   uuid fk,
   channel    text,                       -- slack | telegram | inapp
-  status     text,                       -- sent | failed | skipped
+  status     text,                       -- sent | failed | skipped | deferred
+                                         -- deferred = QUIET_HOURS 로 미뤄짐.
+                                         --   버린 게 아니라 아침 다이제스트로 나간다 (§6)
   error      text,
   sent_at    timestamptz
 )
