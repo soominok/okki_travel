@@ -64,7 +64,10 @@
 │                      │      (SCAN)            [hotellook]     │
 │                      │                        [tourapi]       │
 │                      │                        [crawler*]      │
-│                      ├─▶ VerifyStage    ──▶ [amadeus]         │
+│                      ├─▶ CallBudget     ──▶ Postgres          │
+│                      ├─▶ Sampler        ──▶ [brightdata]      │
+│                      │      (SAMPLE)          coverage 보강    │
+│                      ├─▶ VerifyStage    ──▶ [brightdata]      │
 │                      ├─▶ SnapshotStore  ──▶ Postgres          │
 │                      ├─▶ RuleEngine     ──▶ Alert 생성        │
 │                      └─▶ NotifyDispatcher ─▶ [slack][inapp]   │
@@ -113,9 +116,10 @@ trip_pick/
 │   │   │   ├── registry.py      # 등록/조회/우선순위
 │   │   │   ├── http.py          # 레이트리밋 httpx 래퍼
 │   │   │   ├── policy.py        # robots.txt / 크롤 정책 게이트
+│   │   │   ├── budget.py        # call_budgets 선점 (cost_per_call>0 소스용)
 │   │   │   ├── flight/
 │   │   │   │   ├── travelpayouts.py
-│   │   │   │   └── amadeus.py
+│   │   │   │   └── brightdata.py
 │   │   │   ├── stay/
 │   │   │   │   ├── hotellook.py
 │   │   │   │   └── tourapi_stay.py
@@ -123,7 +127,9 @@ trip_pick/
 │   │   │       ├── tourapi.py
 │   │   │       └── kma_weather.py
 │   │   ├── engine/              # ★ 도메인 로직
-│   │   │   ├── collector.py     # SCAN → VERIFY → 저장
+│   │   │   ├── collector.py     # SCAN → SAMPLE → VERIFY → 저장
+│   │   │   ├── sampler.py       # 커버리지 3티어 샘플링 정책
+│   │   │   ├── coverage.py      # coverage_cells 갱신·통계
 │   │   │   ├── rules.py         # 알림 규칙 평가 (순수 함수)
 │   │   │   ├── baseline.py      # 기준선(중앙값/최저가) 계산
 │   │   │   └── dedup.py         # 중복 억제 + 쿨다운
@@ -275,7 +281,7 @@ source_health (
   disabled_until timestamptz
 )
 
--- 환율 (Phase 1 필수. Amadeus 가 EUR/USD 로 응답한다)
+-- 환율 (소스가 KRW 를 못 주는 경우의 폴백. P4에서 필요 여부 판명)
 fx_rates (
   currency    text not null,           -- USD, EUR, JPY ...
   rate_date   date not null,           -- 고시 영업일
@@ -287,6 +293,32 @@ fx_rates (
 --   select rate_krw from fx_rates
 --   where currency = $1 and rate_date <= $2
 --   order by rate_date desc limit 1
+
+-- ───────────────────────────────────────────────────────────────
+-- 소스 계층 재설계로 추가된 것들 (2026-09-01)
+-- 전체 DDL과 근거는 docs/superpowers/specs/2026-09-01-source-layer-design.md §4~§6
+-- ───────────────────────────────────────────────────────────────
+
+call_budgets (source, period_start) -- 유료 소스 월 예산. SAMPLE 상한 + 자기보정 일일 페이싱
+coverage_cells (watch_id, depart_date, nights) -- 탐색 공간 180칸. "안 봤다" vs "봤는데 없다"
+probe_log (id)                      -- 샘플링 적중률 기록. 상수 튜닝의 근거. 90일 보관
+app_settings (key, value jsonb)     -- sampling_policy 등 재배포 없이 바꿀 상수
+
+-- 기존 테이블 칼럼 추가
+alter table offers          add column freshness text not null,      -- live | cached
+                            add column cache_age_days int,
+                            add column observed_at timestamptz,      -- 소스가 안 주면 NULL
+                            add column verified bool not null default false,
+                            add column verify_run_id uuid;
+alter table price_snapshots add column coverage_pct numeric,         -- ★ 아래 주의
+                            add column live_ratio numeric,
+                            add column credits_used int;
+alter table watches         add column last_sampled_at timestamptz;  -- 샘플링 라운드로빈
+alter table watch_runs      add column credits_used int;
+
+-- ★ coverage_pct 가 없으면 커버리지 하락을 가격 상승으로 오독한다.
+--   차트만이 아니라 rules.py 도 똑같이 속아 all_time_low 가 오발동한다.
+--   따라서 규칙 평가에 커버리지 게이트를 건다 (스펙 §6).
 
 -- 관광 장소 캐시 (Phase 2~3 대비, Phase 1에서 테이블만 만들어둠)
 places (
@@ -375,7 +407,14 @@ places (
 | POST | `/api/alerts/{id}/read` | 읽음 처리 |
 | GET | `/api/sources` | 소스별 health/enabled/키 설정 여부 |
 | POST | `/api/notify/test` | 슬랙 테스트 메시지 발송 |
-| GET | `/api/meta/airports?q=후쿠` | 공항 자동완성 (Amadeus locations 캐시) |
+| GET | `/api/meta/airports?q=후쿠` | 공항 자동완성 (아래 주 참조) |
+| GET | `/api/watches/{id}/coverage` | 커버리지 히트맵 데이터 (180칸 상태) |
+| GET | `/api/budget` | 소스별 잔여 크레딧·소진 예상일 |
+
+> **공항 자동완성 소스**: 초안은 Amadeus `reference-data/locations`를 썼으나 폐쇄됐다.
+> 대신 **정적 IATA 데이터셋을 리포지토리에 동봉**한다 (OpenFlights 등 공개 데이터, ~7천 행).
+> 공항 목록은 거의 변하지 않으므로 API를 쓸 이유가 없다. 부팅 시 메모리에 적재하거나
+> `places` 와 별개의 `airports` 테이블에 시드한다.
 
 에러 응답은 전부 동일 포맷:
 
@@ -396,9 +435,19 @@ class Field(BaseModel):
     label: str
     value: str
 
+class Confidence(BaseModel):
+    """이 가격을 얼마나 믿을 수 있는가. 표현 방법은 렌더러가 정한다.
+    Travelpayouts 캐시는 최대 7일 묵을 수 있으므로 이걸 숨기면 신뢰가 무너진다."""
+    verified: bool                # VERIFY 단계를 통과했나
+    freshness: Literal["live", "cached"]
+    age_label: str                # "12분 전 실측" / "최대 7일 전 캐시"
+    source: str
+    coverage_pct: int
+
 class NotificationMessage(BaseModel):
     """채널 중립 메시지. Slack/Telegram/InApp 어디로든 갈 수 있다."""
     severity: Literal["info", "good", "great"]
+    confidence: Confidence        # 신선도·검증 여부 (렌더러가 알아서 표현)
     title: str                    # "🔥 ICN→FUK 238,000원"
     summary: str                  # "목표가 250,000원 대비 -12,000원"
     fields: list[Field]           # 날짜/항공사/직전가/최저기록
@@ -526,8 +575,9 @@ PUBLIC_WEB_URL=http://localhost:3000
 # --- Sources (없으면 해당 어댑터만 비활성) ---
 TRAVELPAYOUTS_TOKEN=
 TRAVELPAYOUTS_MARKER=
-AMADEUS_CLIENT_ID=
-AMADEUS_CLIENT_SECRET=
+BRIGHTDATA_API_KEY=
+BRIGHTDATA_MONTHLY_CREDITS=5000
+BRIGHTDATA_SAMPLE_CAP_RATIO=0.70
 DATA_GO_KR_KEY=
 
 # --- Notify ---
@@ -540,7 +590,7 @@ QUIET_HOURS=23:00-08:00        # 이 시간대는 great 등급만 발송
 
 # --- Collect ---
 DEFAULT_INTERVAL_MIN=360
-VERIFY_THRESHOLD_RATIO=1.15    # 목표가의 115% 이내면 Amadeus로 실가격 검증
+VERIFY_THRESHOLD_RATIO=1.15    # 목표가의 115% 이내면 Bright Data로 실가격 검증
 CRAWL_ENABLED=false            # 기본 off. 켜도 policy.py 게이트를 통과해야 함
 CRAWL_MIN_INTERVAL_SEC=5
 HTTP_USER_AGENT=TripPick/0.1 (personal price watcher; contact: you@example.com)

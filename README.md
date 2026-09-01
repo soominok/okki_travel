@@ -35,10 +35,16 @@
 
 `docs/03-DATA-SOURCES.md` §5 체크리스트 참고.
 
-- [Travelpayouts](https://www.travelpayouts.com) — 항공/호텔 최저가 (주력 소스)
-- [Amadeus for Developers](https://developers.amadeus.com) — 실가격 검증
+- [Travelpayouts](https://www.travelpayouts.com) — Aviasales **Data** API. 광역 탐색(SCAN). 무료·제한 없음
+- [Bright Data](https://brightdata.com) — Google Flights. 실가격 검증(VERIFY)과 커버리지 보강(SAMPLE).
+  월 5,000 크레딧 무료·카드 불필요·소진 시 하드 스톱
 - [공공데이터포털](https://www.data.go.kr) — 관광정보, 날씨
 - Slack Incoming Webhook — 알림 수신
+
+> ⚠️ 초안에 있던 **Amadeus Self-Service는 2026-07-17 폐쇄**되어 사용할 수 없다.
+> Travelpayouts의 *Flight Search* API도 50,000 MAU 요건이 있어 개인 프로젝트는 불가하다
+> (우리가 쓰는 *Data* API는 제한 없음). 자세한 경위는
+> [소스 계층 재설계 스펙](docs/superpowers/specs/2026-09-01-source-layer-design.md) §1 참조.
 
 ### 2. 구현
 

@@ -63,7 +63,9 @@ P4까지 가서 발견하면 설계를 되돌려야 한다.
 python spikes/travelpayouts_probe.py
 ```
 
-출력 마지막의 판정이 🟢이면 설계대로 진행, 🟠이면 2단계 수집이 필수, 🔴이면 설계 변경이다.
+판정에 따라 `max_span_days`와 샘플링 예산이 달라진다. **코드 구조는 셋 다 같다** —
+capability 선언 기반으로 설계했기 때문이다 (스펙 §2).
+🟢 = 샘플링 예산 낮게 / 🟠 = 설계대로 / 🔴 = `max_span_days=1`, 샘플링이 주력.
 **결과를 그대로 Claude Code에 붙여넣고** 이렇게 말한다:
 
 ```
@@ -225,7 +227,8 @@ downgrade 도 동작하는지 확인.
 docs/03-DATA-SOURCES.md 를 다시 읽고 소스 어댑터 레이어를 구현해줘.
 어댑터들은 서로 독립적이니 superpowers:dispatching-parallel-agents 로 병렬 진행해도 좋아.
 
-1. app/sources/base.py — 문서 §3 의 Protocol, FlightQuery, StayQuery, Offer, SourceResult.
+1. app/sources/base.py — 문서 §3 의 SourceCapability, FetchRequest, Offer, SourceResult, Protocol.
+   ★ fan-out은 어댑터가 아니라 collector가 한다. 어댑터는 capability만 선언한다.
    "어댑터는 절대 예외를 던지지 않고 SourceResult(ok=False, error=...) 를 반환한다"를
    docstring 에 계약으로 명시.
 2. app/sources/http.py — httpx.AsyncClient 래퍼. 도메인별 토큰버킷 레이트리밋,
@@ -236,8 +239,11 @@ docs/03-DATA-SOURCES.md 를 다시 읽고 소스 어댑터 레이어를 구현�
 4. app/sources/registry.py — 등록/조회, kind 필터, priority 정렬, 키 미설정 시 auto-disabled.
 5. app/sources/flight/travelpayouts.py — grouped_prices / prices_for_dates 로
    기간범위+체류일수를 최소 호출로 커버. deep_link 는 marker 포함 생성.
-6. app/sources/flight/amadeus.py — OAuth2 토큰 30분 캐시, flight-offers 로 특정 날짜만
-   정밀 조회 (VERIFY 단계용).
+6. app/sources/flight/brightdata.py — Google Flights 실가격. SAMPLE·VERIFY 양쪽에서 쓰인다.
+   어댑터는 자기가 어느 목적으로 불렸는지 모른다 (구분은 예산 원장에서만).
+   ⚠️ Amadeus 어댑터는 만들지 마. 2026-07-17 폐쇄됐다.
+6b. app/sources/budget.py — call_budgets 원자적 선점. 스펙 §4의 SQL 그대로.
+   cost_per_call>0 인 어댑터는 이걸 통과해야만 호출된다.
 7. app/sources/stay/hotellook.py, app/sources/stay/tourapi_stay.py
 
 테스트: tests/fixtures/<source>/*.json 에 샘플을 두고 respx 로 목킹. 네트워크 호출 없이.
@@ -270,9 +276,15 @@ app/engine/ 을 구현해줘.
 3. engine/dedup.py — docs/02 §6 의 dedup_key + 쿨다운. severity 상승 시 쿨다운 무시.
    테스트: 같은 가격대 반복 → 1회만 / 5000원 버킷 경계 / 쿨다운 만료 후 재발송 /
           good→great 승격 시 즉시 발송
-4. engine/collector.py — SCAN(병렬 gather) → 목표가×VERIFY_THRESHOLD_RATIO 이내면
-   VERIFY(amadeus) → offers 저장 → price_snapshots 1행 → rules 평가 →
+4. engine/sampler.py — 커버리지 3티어 샘플링 (스펙 §5). 경계 탐색 → 블록 정찰 → 유휴 순회.
+   상수는 코드에 박지 말고 app_settings.sampling_policy 에서 읽어. 나중에 실데이터로 튜닝한다.
+   probe_log 에 시도 결과를 남겨 — 그게 튜닝의 유일한 근거다.
+5. engine/collector.py — SCAN(병렬 gather) → coverage_cells 반영 → 예산 선점 →
+   SAMPLE → 목표가×VERIFY_THRESHOLD_RATIO 이내면 VERIFY(brightdata) →
+   offers 저장 → price_snapshots 1행(coverage_pct 포함) → rules 평가 →
    dedup 통과분만 알림 생성 → watch_runs 기록.
+   ★ 커버리지 게이트: coverage_pct 가 직전 대비 coverage_drop_gate 이하로 급락하면
+     min_price 를 신뢰하지 말고 알림 보류. 보류 사실을 watch_runs 에 남길 것.
    소스 하나가 실패해도 나머지로 계속 진행. 실패는 watch_runs.sources_failed 와
    source_health 에 기록. 전체를 죽이지 마.
 

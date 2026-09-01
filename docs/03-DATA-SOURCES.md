@@ -17,17 +17,30 @@
 3. 가격이 SPA 내부 API의 서명된 요청으로 오간다. 서명 로직이 수시로 바뀐다.
    → 셀렉터가 아니라 **암호화 스킴**을 계속 따라가야 한다. 유지보수 불가능.
 
-반면 **"해외 API 발급이 번거롭다"는 걱정은 실제로는 기우**다.
-아래 두 곳은 카드 등록 없이, 5~10분이면 키가 나오고, 무료 티어로 이 프로젝트에 충분하다.
+### ⚠️ 2026년 현실 — 공식 API 생태계가 개인 개발자에게 닫혔다
 
-| 소스 | 발급 난이도 | 비용 | 얻는 것 |
+이 문서의 초안은 Amadeus와 Travelpayouts를 전제로 썼다. **2026-09-01 실측 확인 결과
+둘 다 원래 계획대로는 쓸 수 없었다.**
+
+| 소스 | 상태 |
+|---|---|
+| ~~Amadeus Self-Service~~ | **2026-07-17 완전 폐쇄.** 신규 가입·기존 키 모두 불가. Enterprise만 잔존 |
+| ~~Travelpayouts Flight **Search** API~~ | **50,000 MAU 요건.** 개인 프로젝트 불가 |
+| ~~Kiwi Tequila~~ | 2024-05부터 초대제 B2B 전용 |
+
+따라서 현재 구성은 아래와 같다. **소스를 추가·교체할 때는 반드시 실제로 확인하고 적을 것.**
+"무료 티어가 있다"는 기억은 2026년 기준으로 틀린 경우가 많다.
+
+| 소스 | 역할 | 발급 | 비용 |
 |---|---|---|---|
-| **Travelpayouts (Aviasales/Hotellook)** | 이메일 가입 → 즉시 토큰 | 무료 | 노선별 최저가, 월별 최저가 캘린더, 호텔 가격 |
-| **Amadeus for Developers (Self-Service)** | 가입 → 앱 생성 → 즉시 키 | 무료 티어 (월 호출 제한) | 실시간 항공 오퍼, 최저 날짜 검색, 공항/도시 코드 |
-| **공공데이터포털 (data.go.kr)** | 회원가입 → 활용신청 → 대부분 자동승인 | 무료 | 관광정보, 숙박, 캠핑장, 축제, 운항정보, 날씨 |
+| **Travelpayouts — Aviasales _Data_ API** | SCAN (광역 탐색) | 이메일 가입 → 즉시 토큰, **제한 없음** | 무료 |
+| **Bright Data — Google Flights** | SAMPLE + VERIFY | 가입 → API 키, 카드 불필요 | 월 5,000 크레딧 무료·매월 갱신·**하드 스톱** |
+| **공공데이터포털 (data.go.kr)** | 관광·숙박·날씨 | 회원가입 → 활용신청 (대부분 자동승인) | 무료 |
 
 크롤링은 **버리지 않는다.** 다만 3순위 보조 어댑터로 내리고,
 robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
+
+> 상세 설계는 [`docs/superpowers/specs/2026-09-01-source-layer-design.md`](superpowers/specs/2026-09-01-source-layer-design.md) 참조.
 
 ---
 
@@ -56,6 +69,20 @@ robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
 정책을 통과하지 못하면 어댑터는 `SourceDisabled` 를 던지고 **조용히 건너뛴다.**
 이건 선택이 아니라 아키텍처 제약이다.
 
+### 입장 변경 — 제3자 스크래퍼 API 위탁 (2026-09-01)
+
+위 정책은 "직접 스크래핑하지 않는다"를 뜻한다. **Bright Data는 Google Flights를 스크래핑하는
+상용 서비스이므로, 이를 채택한 것은 그 원칙을 외주로 완화한 것이다.**
+
+빠져나갈 구멍이 아니라 명시적 입장 변경으로 기록한다. 근거는 다음과 같다.
+
+- 공식 API가 전부 닫혀 실가격 검증 수단이 남지 않았다 (§0)
+- 스크래핑의 법적·기술적 부담은 해당 업체가 자기 사업으로 진다
+- 우리 코드는 여전히 봇 차단 우회·캡차 우회·로그인 세션 재사용을 하지 않는다
+
+**`CLAUDE.md` 9번 규칙(직접 크롤러를 만들지 않는다)은 그대로 유효하다.**
+야놀자·여기어때·스카이스캐너·아고다 어댑터는 계속 만들지 않는다.
+
 ---
 
 ## 2. 소스 카탈로그
@@ -69,20 +96,27 @@ robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
   - `/aviasales/v3/prices_for_dates` — 출발/도착/기간별 최저가 목록
   - `/aviasales/v3/grouped_prices` — 월별/일별 그룹 최저가 (유연한 날짜 감시에 최적)
   - `/v1/prices/cheap` — 캐시된 최저가
-- 특징: **캐시된 가격**이라 실시간성은 떨어지지만, 트렌드 추적·급락 감지에는 충분하고
-  호출 제한이 관대하다. → **정기 폴링의 기본 소스로 삼는다.**
-- 주의: 응답 가격은 보통 편도/통화 파라미터에 좌우된다. `currency=krw` 고정.
+- 접근 조건: **제한 없음.** 가입 후 Profile → API token 에서 바로 받는다
+  (50,000 MAU 요건은 별개인 *Flight Search* API 이야기다. 혼동하지 말 것)
+- ⚠️ **캐시의 성질이 이 프로젝트 설계 전체를 규정한다:**
+  - 캐시는 **실제 사용자들의 검색 이력**에서 만들어진다
+  - 보관 기간은 **쿼리 종류에 따라 2~7일**
+  - 즉 **(a)** 가격이 최대 7일 묵었을 수 있고,
+    **(b)** 아무도 검색하지 않은 날짜 조합은 **데이터가 아예 없다**
+  - (b)가 "유연한 날짜 감시"라는 차별점을 직접 위협한다 → §4의 SAMPLE 단계가 이걸 메운다
+- 주의: 응답 가격은 편도/통화 파라미터에 좌우된다. `currency=krw` 고정.
 
-#### B. Amadeus Self-Service ⭐ 2순위 (검증용)
+#### B. Bright Data — Google Flights ⭐ 검증·보강용
 
-- 가입: <https://developers.amadeus.com> → My Self-Service Workspace → API Key/Secret
-- 인증: OAuth2 client_credentials → `access_token` (30분) 캐싱 필수
-- 핵심 엔드포인트:
-  - `GET /v2/shopping/flight-offers` — 실시간 오퍼 (정확하지만 쿼터 소모 큼)
-  - `GET /v1/shopping/flight-dates` — 최저가 날짜 검색
-  - `GET /v1/reference-data/locations` — 공항/도시 IATA 코드 (자동완성용)
-- 전략: **Travelpayouts가 "싸다"고 신호를 준 후보에 대해서만** Amadeus로 실가격 검증.
-  이러면 무료 쿼터 안에서 정확도를 얻는다. (2단계 수집: `scan → verify`)
+- 가입: <https://brightdata.com> → API 키. **카드 등록 불필요**
+- 무료 티어: **월 5,000 크레딧, 매월 1일 갱신, 1요청 = 1크레딧**
+- 소진 시 **하드 스톱** — 초과 청구가 구조적으로 발생하지 않는다 (개인 프로젝트에 중요)
+- 제품: SERP API 또는 Web Scraper API 의 Google Flights
+- ⚠️ 개인 이메일 + 카드 미등록이면 *Web Unlocker*·프록시는 막힌다.
+  SERP/Web Scraper API는 해당 없음 — **가입 시 확인 필요** (스펙 §8 가정 A5)
+- 두 가지 목적으로 쓴다. 어댑터는 하나이고, 구분은 예산 원장에서만 이뤄진다:
+  - **VERIFY** — 목표가 근처 후보의 실가격 확인. 페이싱 없음
+  - **SAMPLE** — Travelpayouts가 비운 날짜 구간 탐색. 페이싱 + 라운드로빈
 
 #### C. 국내 공공데이터 (보조)
 
@@ -124,10 +158,17 @@ robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
 | 대기질 | 한국환경공단 에어코리아 | 여행 적합도 |
 | 여행경보 | 외교부 국가별 여행경보 | 해외 목적지 경고 |
 
-### ⚠️ 환율은 Phase 2가 아니라 **Phase 1 필수**다
+### 환율 — Phase 1에 **준비**하되 필수 여부는 P4에서 판명
 
-원래 이 표에 넣어뒀는데 잘못된 분류였다. **Amadeus는 EUR/USD로 응답**하므로
-P4(어댑터) 시점에 이미 환율이 필요하다. `price_krw`를 채울 수 없으면 비교 자체가 불가능하다.
+초안은 "Amadeus가 EUR/USD로 응답하므로 Phase 1 필수"라고 적었으나, Amadeus가 사라져
+그 근거는 소멸했다. 현재 두 소스는 통화를 지정할 수 있는 것으로 **보인다**:
+
+- Travelpayouts: `currency=krw` 파라미터 존재
+- Bright Data Google Flights: 지역·통화 설정 가능한 것으로 보이나 **확인하지 않았다**
+
+따라서 `fx_rates` 테이블과 폴백 로직은 **만들어두되**, 두 소스가 실제로 KRW를 반환하면
+경로를 타지 않는다. 테이블 유지 비용은 거의 없고, 하나라도 외화로 응답하면 즉시 필요해진다.
+(스펙 §8 가정 A6)
 
 - 소스: 한국수출입은행 환율 API (`data.go.kr` 아님, 별도 발급) 또는 한국은행 ECOS
 - **주말·공휴일에는 데이터가 없다.** 반드시 다음을 구현한다:
@@ -150,20 +191,36 @@ from typing import Protocol, Literal
 from datetime import date
 from pydantic import BaseModel
 
-class FlightQuery(BaseModel):
+class SourceCapability(BaseModel):
+    """★ 어댑터가 자기 능력을 선언한다. fan-out은 collector가 한다.
+    미검증 가정(스펙 §8)의 결과는 코드 구조가 아니라 이 값들로 흡수된다."""
+    role:               Literal["scan", "verify"]
+    date_range_native:  bool          # 기간 범위를 1회 호출로 받는가
+    max_span_days:      int           # 1회 호출이 커버하는 최대 일수
+    trip_length_filter: bool          # 체류일수를 서버가 걸러주는가
+    cost_per_call:      int           # 예산 단위. travelpayouts=0, brightdata=1
+    freshness:          Literal["live", "cached"]
+    max_cache_age_days: int | None    # travelpayouts=7, brightdata=None
+    # role은 어댑터의 *성질*이지 사용 목적이 아니다.
+    # SAMPLE과 VERIFY는 둘 다 role="verify" 어댑터를 쓰는 collector 쪽 목적이며,
+    # 구분은 call_budgets 의 used_sample / used_verify 에서만 이뤄진다.
+
+class FetchRequest(BaseModel):
+    """★ 호출 1회분의 일감. 어댑터가 '1회에 이만큼 된다'고 선언한 그 단위.
+    3개월 범위를 몇 조각으로 쪼갤지는 collector 가 max_span_days 를 보고 정한다."""
     origin: str                  # IATA, 예: "ICN"
     destination: str
-    depart_from: date            # 유연 검색의 시작일
-    depart_to: date              # 유연 검색의 종료일
-    trip_length_min: int | None  # 왕복 최소 박수 (None이면 편도)
-    trip_length_max: int | None
+    depart_from: date
+    depart_to: date              # max_span_days 이내
+    nights_min: int | None       # 왕복 최소 박수 (None이면 편도)
+    nights_max: int | None
     adults: int = 1
     cabin: Literal["economy", "premium", "business", "first"] = "economy"
     currency: str = "KRW"
 
 class Offer(BaseModel):
     """모든 소스의 결과가 이 형태로 정규화된다."""
-    source: str                  # "travelpayouts", "amadeus", ...
+    source: str                  # "travelpayouts", "brightdata", ...
     external_id: str             # 소스 내 고유 키 (dedup 용)
     kind: Literal["flight", "stay", "package"]
     price_krw: int               # 정규화된 원화 정수
@@ -175,41 +232,57 @@ class Offer(BaseModel):
     deep_link: str | None        # 예약 페이지 URL
     raw: dict                    # 원본 응답 (디버깅·재해석용, JSONB 저장)
     collected_at: datetime
+    # 신선도 — 사용자에게 신뢰도를 보여주기 위해 필요 (스펙 §7)
+    freshness: Literal["live", "cached"]
+    cache_age_days: int | None
+    observed_at: datetime | None # 소스가 관측한 시각. 안 주면 None (스펙 §8 가정 A3)
 
 class SourceAdapter(Protocol):
     name: str
     kind: Literal["flight", "stay", "place"]
-    priority: int                # 낮을수록 먼저
+    capability: SourceCapability
 
     async def health(self) -> bool: ...
-    async def search_flight(self, q: FlightQuery) -> list[Offer]: ...
+    async def fetch(self, req: FetchRequest) -> SourceResult: ...
 ```
 
 ### 어댑터 구현 규칙 (반드시 지킬 것)
 
 1. **어댑터는 절대 예외를 밖으로 던지지 않는다.** 실패는 `SourceResult(ok=False, error=...)`로 반환.
    한 소스의 장애가 전체 수집을 죽이면 안 된다.
-2. **어댑터는 DB를 모른다.** 순수 함수처럼 `Query → list[Offer]` 만 한다. 저장은 엔진 책임.
+2. **어댑터는 DB를 모른다.** 순수 함수처럼 `FetchRequest → SourceResult` 만 한다. 저장은 엔진 책임.
+   어댑터는 자기가 SCAN·SAMPLE·VERIFY 중 무엇으로 불렸는지도 알지 못한다.
 3. **모든 어댑터는 fixture 기반 테스트를 가진다.** `tests/fixtures/<source>/*.json` 에
    실제 응답을 한 번 저장해두고, 정규화 로직을 네트워크 없이 검증한다.
    → 소스가 응답 포맷을 바꾸면 테스트가 먼저 깨진다.
 4. **레이트리밋은 어댑터가 아니라 `HttpClient` 래퍼가 담당한다.** 도메인별 토큰 버킷.
 5. 신규 소스 추가 = `sources/flight/newsource.py` 1개 + fixture + registry 한 줄. 그 외 수정 금지.
+6. **fan-out 을 어댑터 안에서 하지 않는다.** 기간을 쪼개는 것은 collector 의 일이다.
+   어댑터가 내부에서 루프를 돌면 호출 수가 숨어 예산을 강제할 수 없게 된다.
+7. **`cost_per_call > 0` 인 어댑터는 예산 선점 없이 호출하지 않는다.** collector 가
+   `call_budgets` 에서 확보한 뒤에만 부른다.
 
 ---
 
-## 4. 2단계 수집 전략 (쿼터 절약)
+## 4. 3단계 수집 전략
 
 ```
-[SCAN]  Travelpayouts 로 넓게 훑는다 (무료·관대·캐시가격)
-          ↓ 목표가 근처 or 급락 후보만 통과
-[VERIFY] Amadeus 로 해당 날짜만 실가격 조회 (정확·쿼터 소모)
-          ↓
-[ALERT] 검증된 가격으로만 알림 발송
+[SCAN]   Travelpayouts 로 넓게 훑는다        무료·무제한·캐시가격(2~7일)
+           ↓ 결과를 coverage_cells 에 반영
+[SAMPLE] Bright Data 로 빈칸을 탐색한다      예산 소모·페이싱·라운드로빈
+           ↓ 캐시에 없던 날짜의 실가격을 확보
+[VERIFY] Bright Data 로 후보를 확인한다      예산 소모·페이싱 없음
+           ↓ 목표가의 VERIFY_THRESHOLD_RATIO 이내 후보만
+[ALERT]  검증 여부를 메시지에 명시하고 발송
 ```
 
-이 구조 덕분에 무료 쿼터로도 정확한 알림을 보낼 수 있다.
-`VERIFY` 단계는 어댑터 `priority` 와 엔진의 `verify_threshold_ratio` 설정으로 제어한다.
+**SAMPLE이 초안에는 없던 단계다.** Travelpayouts 캐시가 사용자 검색 이력 기반이라
+아무도 안 본 날짜는 비어 있고, 그걸 메우지 않으면 "유연한 날짜 감시"가 인기 날짜에서만
+동작한다. 예산으로 커버리지를 사는 단계다.
+
+- SAMPLE과 VERIFY는 **같은 어댑터**를 쓴다. 구분은 예산 원장(`call_budgets`)에서만 이뤄진다
+- 검증되지 않은 가격도 알림은 나간다. 대신 메시지에 "최대 7일 전 캐시"를 명시한다
+- 샘플링 정책·티어·포기 규칙은 스펙 §5, 예산 관리는 스펙 §4 참조
 
 ---
 
@@ -217,9 +290,11 @@ class SourceAdapter(Protocol):
 
 구현 전에 아래를 받아 `.env`에 넣어둔다. **전부 무료, 카드 등록 불필요.**
 
-- [ ] `TRAVELPAYOUTS_TOKEN` — travelpayouts.com 가입 후 대시보드
+- [ ] `TRAVELPAYOUTS_TOKEN` — travelpayouts.com 가입 → Profile → API token
 - [ ] `TRAVELPAYOUTS_MARKER` — 동일 대시보드 (딥링크용 파트너 ID)
-- [ ] `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET` — developers.amadeus.com
+- [ ] `BRIGHTDATA_API_KEY` — brightdata.com 가입 → API 키. 카드 불필요
+      - 가입 시 **SERP / Web Scraper API 의 Google Flights 가 카드 없이 쓰이는지 확인**할 것
+      - 무료 5,000 크레딧/월. 소진 시 하드 스톱이므로 초과 청구는 없다
 - [ ] `DATA_GO_KR_KEY` — data.go.kr 가입 후 아래 3개 활용신청
       - 한국관광공사_국문 관광정보 서비스_GW
       - 한국관광공사_고캠핑 정보 조회서비스
