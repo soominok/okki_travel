@@ -96,7 +96,12 @@ Rule = Annotated[
 
 
 class WatchCreate(BaseModel):
-    kind: Literal["flight", "stay", "package"]
+    # "package" 를 넣지 않는다. WatchParams 에 PackageParams variant 가 없어
+    # kind="package" 는 discriminated union 이 인식하지 못하고 항상 검증 실패한다.
+    # API 가 만들 수 없는 값을 받아들이는 척하면 사용자는 "미지원" 대신
+    # 난해한 discriminator 에러를 받는다. Phase 2 에서 PackageParams 를 만들 때 되돌린다.
+    # (DB 의 watches.kind 는 자유 텍스트라 나중에 'package' 를 담을 수 있다 — 별개 문제)
+    kind: Literal["flight", "stay"]
     title: str = Field(min_length=1, max_length=200)
     params: WatchParams
     rules: list[Rule] = Field(default_factory=list)

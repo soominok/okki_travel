@@ -101,3 +101,26 @@ def test_unknown_rule_type_rejected():
                 "rules": [{"id": "x", "type": "존재하지_않는_규칙"}],
             }
         )
+
+
+def test_package_kind_rejected_at_kind_field():
+    """PackageParams variant 가 없으므로 kind="package" 는 kind 필드 자체에서
+    거부되어야 한다 (discriminator 쪽에서 엉뚱하게 터지면 안 된다)."""
+    with pytest.raises(ValidationError) as exc_info:
+        WatchCreate.model_validate(
+            {
+                "kind": "package",
+                "title": "아직 미지원",
+                "params": {
+                    "kind": "flight",
+                    "origin": "ICN",
+                    "destination": "FUK",
+                    "depart_from": "2026-10-01",
+                    "depart_to": "2026-12-31",
+                },
+                "rules": [],
+            }
+        )
+
+    errors = exc_info.value.errors()
+    assert any(err["loc"] == ("kind",) for err in errors)
