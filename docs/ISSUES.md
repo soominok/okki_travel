@@ -7,6 +7,32 @@
 
 ---
 
+## I-006 · 중복 FK 경로 때문에 CASCADE 테스트가 아무것도 검증하지 않았다
+
+- **날짜** 2026-09-01
+- **증상** `watches → watch_runs → offers` 3단 CASCADE 를 검증한다고 만든 테스트가,
+  `offers.run_id` 의 `ondelete` 를 `NO ACTION` 으로 바꿔도 **그대로 초록**이었다
+- **원인** `offers` 는 `watches` 로 가는 FK 를 **두 개** 갖는다 — `run_id`(watch_runs 경유)와
+  `watch_id`(직접). `DELETE FROM watches` 는 `watch_id` 경로만으로 offers 를 지워버리므로
+  `run_id` 의 설정은 검사 대상조차 되지 않는다.
+  (Postgres 의 NOT DEFERRABLE 제약은 행이 아니라 **문장 단위**로 검사된다)
+- **실측 확인**
+  ```
+  run_id=NO ACTION + DELETE FROM watches     -> 성공, offers 0행   (테스트 초록 = 거짓)
+  run_id=NO ACTION + DELETE FROM watch_runs  -> FK violation       (테스트 빨간불 = 참)
+  run_id=CASCADE   + DELETE FROM watch_runs  -> 성공, offers 0행   (테스트 초록 = 참)
+  ```
+- **해결** 중간 테이블(`watch_runs`)을 **직접** 삭제해 검증 대상 경로를 고립시킨다
+- **교훈**
+  1. **CASCADE 테스트는 검증하려는 FK 경로를 고립시켜야 한다.** 최상위 부모를 지우면
+     중복 경로가 결과를 만들어내고, 테스트는 통과하지만 아무것도 보장하지 않는다
+  2. 테스트를 만들 때 **"이 제약을 깨면 정말 빨간불이 되는가"를 실제로 깨봐야 한다.**
+     롤백 트랜잭션 안에서 `ALTER TABLE ... DROP/ADD CONSTRAINT` 로 안전하게 확인할 수 있다
+  3. 이 프로젝트의 여러 테이블이 `watches` 를 직접 참조하므로(`offers`, `alerts`,
+     `coverage_cells`) 같은 함정이 반복된다. 중간 테이블 경유 FK 를 검증할 때 특히 주의
+
+---
+
 ## I-005 · 마이그레이션 파일을 직접 고치면 테스트가 옛 스키마로 통과한다
 
 - **날짜** 2026-09-01
