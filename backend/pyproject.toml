@@ -31,11 +31,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-[tool.ruff.lint.per-file-ignores]
-# Alembic autogenerate 산출물은 사람이 손대지 않는 기계 생성 파일이다.
-# 줄길이(E501)와 import 정렬(I001)만 면제한다 — F401 같은 진짜 결함은 계속 잡는다.
-"alembic/versions/*" = ["E501", "I001"]
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 # 픽스처의 루프 스코프만 세션으로 만든다. 테스트 함수는 기본값(function)이므로
