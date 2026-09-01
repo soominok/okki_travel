@@ -277,3 +277,41 @@ async def test_coverage_cell_pk_is_watch_date_nights(migrated_engine):
     async with migrated_engine.connect() as conn:
         pk = await conn.run_sync(lambda c: inspect(c).get_pk_constraint("coverage_cells"))
     assert sorted(pk["constrained_columns"]) == ["depart_date", "nights", "watch_id"]
+
+
+async def test_coverage_cells_cascade_delete_via_watch_deletion(migrated_engine):
+    """coverage_cells.watch_id -> watches 는 직접 FK 하나뿐이고 우회 경로가 없다
+    (offers 와 달리 중간 테이블을 경유하지 않는다. I-006 의 함정은 여기 해당하지 않는다).
+    이 테이블은 Watch 당 ~180행으로 프로젝트에서 행 수가 가장 많고 Plan 3 샘플러가
+    가장 무겁게 쓰므로, CASCADE 가 깨지면 고아 행이 대량으로 남는다. 그래서 잠가둔다."""
+    async with migrated_engine.connect() as conn:
+        trans = await conn.begin()
+        try:
+            watch_id = await conn.scalar(
+                text("""
+                INSERT INTO watches (id, kind, title, params, rules, interval_min, status)
+                VALUES (gen_random_uuid(), 'stay', 'coverage-cascade-test',
+                        '{}'::jsonb, '[]'::jsonb, 360, 'active')
+                RETURNING id
+            """)
+            )
+            await conn.execute(
+                text("""
+                INSERT INTO coverage_cells (watch_id, depart_date, nights, state)
+                VALUES
+                    (:watch_id, '2026-10-01', 2, 'unknown'),
+                    (:watch_id, '2026-10-02', 2, 'unknown'),
+                    (:watch_id, '2026-10-03', 3, 'unknown')
+            """),
+                {"watch_id": watch_id},
+            )
+
+            await conn.execute(text("DELETE FROM watches WHERE id = :id"), {"id": watch_id})
+
+            remaining = await conn.scalar(
+                text("SELECT count(*) FROM coverage_cells WHERE watch_id = :id"),
+                {"id": watch_id},
+            )
+        finally:
+            await trans.rollback()
+    assert remaining == 0

@@ -120,6 +120,13 @@ class AppSetting(Base):
 
 
 class SourceHealth(Base):
+    """소스별 건강 상태. 연속 실패를 기록해 죽은 소스를 자동 비활성화하고,
+    설정 화면의 "소스 상태" 패널이 이 테이블을 읽는다.
+
+    disabled_until 은 예산 소진·연속 실패로 소스를 잠깐 쉬게 할 때 자동 복구
+    시각을 담는다 — 사람이 수동으로 풀지 않아도 이 시각이 지나면 다시 시도한다.
+    """
+
     __tablename__ = "source_health"
 
     source: Mapped[str] = mapped_column(Text, primary_key=True)
