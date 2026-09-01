@@ -227,3 +227,20 @@ async def test_offers_cascade_delete_via_watch_deletion(migrated_engine):
             await trans.rollback()
     assert remaining_runs == 0
     assert remaining_offers == 0
+
+
+async def test_alerts_has_no_expression_unique_index(migrated_engine):
+    """A1 검토 발견 사항: date_trunc('hour', created_at) 는 timestamptz 기반이라
+    STABLE 이고, Postgres 는 IMMUTABLE 아닌 표현식으로 인덱스를 만들지 못한다.
+    dedup 은 engine/dedup.py 단일 경로로만 강제한다."""
+    async with migrated_engine.connect() as conn:
+        idx = await conn.run_sync(lambda c: inspect(c).get_indexes("alerts"))
+    for i in idx:
+        assert "date_trunc" not in str(i).lower(), f"금지된 표현식 인덱스: {i}"
+
+
+async def test_alerts_dedup_lookup_index_exists(migrated_engine):
+    """dedup 조회가 풀스캔이 되면 안 된다."""
+    async with migrated_engine.connect() as conn:
+        idx = await conn.run_sync(lambda c: inspect(c).get_indexes("alerts"))
+    assert any(i["column_names"][:2] == ["dedup_key", "created_at"] for i in idx), idx
