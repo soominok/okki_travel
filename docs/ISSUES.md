@@ -7,6 +7,38 @@
 
 ---
 
+## I-007 · 컨테이너 안에서 pytest 를 돌리면 39개 전부 실패한다 (오탐)
+
+- **날짜** 2026-09-02
+- **증상** `docker compose exec api uv run pytest` 가 테스트 39개 전부 DB 접속 실패로 죽는다.
+  호스트에서 돌리면 전부 통과한다
+- **원인** `.env` 의 `DATABASE_URL` 은 **호스트 전용**(`localhost:5434`)이다. compose 가
+  api/worker 컨테이너에는 `environment:` 로 `db:5432` 를 따로 주입하는데, `pytest` 는
+  `conftest.py` 의 `pytest_configure` 가 `DATABASE_URL` 을 테스트 DB URL(역시 localhost)로
+  덮어쓰므로 컨테이너 안에서는 그 호스트명을 해석할 수 없다
+- **해결** 테스트는 **호스트에서** 돌린다 (`cd backend && uv run pytest`). CLAUDE.md 의
+  명령어 절이 이미 그렇게 문서화하고 있다
+- **교훈**
+  1. 이 프로젝트에서 `DATABASE_URL` 은 **소비자에 따라 값이 다르다** — 호스트 명령은
+     `localhost:5434`, 컨테이너는 compose 가 주입하는 `db:5432`. 의도된 설계다(I-010 참조 불필요)
+  2. "전부 실패"는 코드 결함보다 **환경 오배치**를 먼저 의심한다. 39개가 한꺼번에
+     같은 이유로 죽으면 그건 테스트가 아니라 연결 문제다
+
+---
+
+## I-008 · docker compose up --build 가 메모리 부족으로 worker 를 죽인다
+
+- **날짜** 2026-09-02
+- **증상** `docker compose up -d --build` 중 worker 가 `OSError: Cannot allocate memory`
+  로 종료. 그리고 호스트에 남은 stray `node.exe` 가 포트 3000 을 점유해 web 이 못 뜸
+- **원인** 4서비스를 동시에 빌드하면 메모리 경합이 난다. 이전 세션의 dev 서버 프로세스가
+  살아남아 포트를 잡고 있는 것은 별개 문제
+- **해결** 잔여 프로세스를 죽이고 `docker compose down -v && up -d --build` 재시도
+- **교훈** 4서비스 동시 빌드가 실패하면 **코드 문제로 오해하지 말 것.** 잔여 프로세스
+  확인(`netstat`/`Get-Process node`) 후 `down -v` 로 완전 초기화하고 재시도한다
+
+---
+
 ## I-006 · 중복 FK 경로 때문에 CASCADE 테스트가 아무것도 검증하지 않았다
 
 - **날짜** 2026-09-01
