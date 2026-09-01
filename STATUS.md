@@ -9,7 +9,7 @@
 
 ```
 단계       설계 완료 · 구현 시작 전
-코드       0줄 (스파이크 스크립트 제외)
+코드       0줄 (스파이크 스크립트 제외) · 계획 1 실행 준비 완료
 블로커     API 토큰 미발급 → 스파이크 실행 불가
 다음 할 일 계획 1(기반) 실행 ← 토큰 없이 가능 / 토큰 받으면 스파이크
 ```
@@ -45,13 +45,21 @@ python spikes/travelpayouts_probe.py
 
 결과를 그대로 붙여넣고 `PROMPTS.md` §0-5의 프롬프트를 실행한다.
 
-### 3. A2 — 구현 계획 수립
+> 토큰 발급과 스파이크는 **계획 1과 병행 가능**하다. 계획 1은 토큰이 필요 없다.
+
+### 3. 계획 1(기반) 실행 — 지금 바로 가능
+
+[계획서](docs/superpowers/plans/2026-09-01-01-foundation.md)를 열고, 아래 중 하나로 실행한다.
 
 ```
-/superpowers:writing-plans
+/superpowers:subagent-driven-development
 ```
+태스크마다 새 서브에이전트(Sonnet)를 띄우고 사이사이 리뷰. 빠르고 컨텍스트가 깨끗하다.
 
-`PROMPTS.md`의 Track A → A2 프롬프트 사용.
+```
+/superpowers:executing-plans
+```
+현재 세션에서 순차 실행. 중간 개입이 쉽다.
 
 ---
 
@@ -66,6 +74,8 @@ python spikes/travelpayouts_probe.py
 | 2026-09-01 | **소스 계층 재설계 스펙** — Amadeus 폐쇄 대응 |
 | 2026-09-01 | 스펙 내용을 기존 문서 전체에 반영 |
 | 2026-09-01 | git 초기화, 기록 체계 구축 |
+| 2026-09-01 | **A2 계획 1(기반) 작성** — 8태스크, TDD 스텝별 코드 포함 |
+| 2026-09-01 | 서브에이전트 정의 2종 (`impl`=Sonnet, `reviewer`=Opus) |
 
 ## 미완료 — 계획 단위
 
@@ -99,7 +109,7 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 3. **[docs/ISSUES.md](docs/ISSUES.md)** — 이미 밟은 지뢰. **다시 밟지 말 것** (5분)
 4. **[docs/superpowers/specs/2026-09-01-source-layer-design.md](docs/superpowers/specs/2026-09-01-source-layer-design.md)**
    — 수집 계층이 왜 이렇게 생겼는지 (15분)
-5. **[CLAUDE.md](CLAUDE.md)** — 절대 규칙 10개
+5. **[CLAUDE.md](CLAUDE.md)** — 절대 규칙 13개
 6. **[PROMPTS.md](PROMPTS.md)** — 다음 작업을 어떻게 시작하는지
 
 시간이 없다면 **1 → 2 → 3**만 읽어도 재개는 가능하다.
