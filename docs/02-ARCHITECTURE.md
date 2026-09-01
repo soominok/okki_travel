@@ -345,8 +345,8 @@ places (
   "destination": "FUK",
   "depart_from": "2026-10-01",
   "depart_to":   "2026-12-31",
-  "trip_length_min": 2,
-  "trip_length_max": 3,
+  "nights_min": 2,
+  "nights_max": 3,
   "weekday_preference": ["FRI", "SAT"],   // 출발 요일 선호 (빈 배열 = 무관)
   "adults": 2,
   "cabin": "economy",
