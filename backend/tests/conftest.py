@@ -62,11 +62,6 @@ _TEST_DB_NAME = urlsplit(TEST_DB_URL).path.lstrip("/")
 
 
 @pytest.fixture(scope="session")
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture(scope="session")
 async def test_engine():
     """테스트 DB가 없으면 만들고, 엔진을 준다.
 
@@ -94,3 +89,20 @@ async def test_engine():
     eng = create_async_engine(TEST_DB_URL, poolclass=NullPool)
     yield eng
     await eng.dispose()
+
+
+@pytest.fixture(scope="session")
+async def migrated_engine(test_engine):
+    """테스트 DB에 alembic upgrade head 를 적용한 엔진."""
+    import subprocess
+
+    env = {**os.environ, "DATABASE_URL": TEST_DB_URL}
+    result = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"alembic 실패:\n{result.stderr}"
+    return test_engine
