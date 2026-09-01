@@ -12,4 +12,6 @@ import os
 
 def pytest_configure(config):
     os.environ.setdefault("APP_API_TOKEN", "x" * 32)
-    os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    os.environ.setdefault(
+        "DATABASE_URL", "postgresql+asyncpg://trip:trip@localhost:5434/trippick_test"
+    )

@@ -20,7 +20,7 @@ async def main() -> None:
     setup_logging(settings.log_level)
     log.info("worker.startup", env=settings.app_env)
 
-    scheduler = AsyncIOScheduler()
+    scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(heartbeat, "interval", seconds=30, id="heartbeat", max_instances=1)
     scheduler.start()
 
