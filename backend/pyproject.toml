@@ -33,7 +33,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-# 세션 스코프 async 픽스처(test_engine, migrated_engine)가 이벤트 루프를 공유하려면 필요.
-# 이게 없으면 "attached to a different loop" 에러가 난다.
+# 픽스처의 루프 스코프만 세션으로 만든다. 테스트 함수는 기본값(function)이므로
+# 세션 스코프 엔진은 반드시 NullPool 이어야 한다 (conftest 참조).
 asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]

@@ -40,5 +40,9 @@ async def healthz() -> dict:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as exc:  # noqa: BLE001 - 헬스체크는 원인을 문자열로 보고한다
+        # 응답 바디에는 예외 타입명만 담는다. str(exc)를 쓰면 asyncpg 예외 메시지에
+        # 섞여 나올 수 있는 접속 문자열·호스트·자격 증명 일부가 무인증 엔드포인트
+        # 응답으로 그대로 샐 수 있다.
         db_status = f"error: {type(exc).__name__}"
+        log.warning("healthz.db_check_failed", error=type(exc).__name__)
     return {"status": "ok" if db_status == "ok" else "degraded", "db": db_status}
