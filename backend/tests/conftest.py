@@ -103,16 +103,41 @@ async def test_engine(_ensure_test_database):
 
 @pytest.fixture(scope="session")
 async def migrated_engine(test_engine):
-    """테스트 DB에 alembic upgrade head 를 적용한 엔진."""
+    """테스트 DB를 downgrade base → upgrade head 로 재적용한 엔진.
+
+    I-005: 마이그레이션 파일을 리비전 ID 변경 없이 직접 고치면, 이미 그 리비전으로
+    스탬프된 DB는 `alembic upgrade head`가 no-op이라 내용이 재적용되지 않는다.
+    이 상태에서 pytest가 그냥 통과하면 "조용한 거짓 초록"이 된다 — 테스트 DB가
+    옛 스키마인 채로 아무도 모르게 넘어간다. 그래서 매 세션 downgrade base를
+    먼저 돌려 스키마를 항상 마이그레이션 파일과 일치시킨다. 부수 효과로 downgrade
+    경로도 매 실행마다 검증된다 (예: op.drop_constraint(None, ...) 같은 이름 없는
+    downgrade 결함이 즉시 드러남).
+
+    세션 스코프라 pytest 실행당 1회만 돈다. 테스트마다 도는 게 아니다.
+    """
     import subprocess
 
     env = {**os.environ, "DATABASE_URL": TEST_DB_URL}
-    result = subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
-        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    downgrade_result = subprocess.run(
+        ["uv", "run", "alembic", "downgrade", "base"],
+        cwd=cwd,
         env=env,
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"alembic 실패:\n{result.stderr}"
+    assert downgrade_result.returncode == 0, (
+        f"alembic downgrade base 실패:\n{downgrade_result.stderr}"
+    )
+
+    upgrade_result = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert upgrade_result.returncode == 0, f"alembic upgrade head 실패:\n{upgrade_result.stderr}"
+
     return test_engine
