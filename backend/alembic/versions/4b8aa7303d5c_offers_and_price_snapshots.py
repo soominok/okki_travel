@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("offer_count", sa.Integer(), nullable=True),
         sa.Column("best_offer_id", sa.UUID(), nullable=True),
         sa.Column("coverage_pct", sa.Numeric(precision=5, scale=2), nullable=True),
-        sa.Column("live_ratio", sa.Numeric(precision=5, scale=2), nullable=True),
+        sa.Column("live_pct", sa.Numeric(precision=5, scale=2), nullable=True),
         sa.Column("credits_used", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["watch_id"],

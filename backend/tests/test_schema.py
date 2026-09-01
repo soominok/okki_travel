@@ -140,5 +140,52 @@ async def test_offers_unique_uses_run_id_not_collected_at(migrated_engine):
 async def test_snapshots_have_coverage_columns(migrated_engine):
     """coverage_pct 가 없으면 커버리지 하락을 가격 상승으로 오독한다 (스펙 §6)."""
     cols = await _columns(migrated_engine, "price_snapshots")
-    for name in ("coverage_pct", "live_ratio", "credits_used"):
+    for name in ("coverage_pct", "live_pct", "credits_used"):
         assert name in cols, f"price_snapshots.{name} 누락"
+
+
+async def test_offers_cascade_delete_through_watch_run_chain(migrated_engine):
+    """다단 캐스케이드: watches 삭제 → watch_runs 삭제 → offers 삭제.
+    offers.run_id 가 CASCADE 가 아니면 watch 삭제 자체가 FK violation 으로 실패한다."""
+    async with migrated_engine.connect() as conn:
+        trans = await conn.begin()
+        try:
+            watch_id = await conn.scalar(
+                text("""
+                INSERT INTO watches (id, kind, title, params, rules, interval_min, status)
+                VALUES (gen_random_uuid(), 'flight', 'offers-cascade-test',
+                        '{}'::jsonb, '[]'::jsonb, 360, 'active')
+                RETURNING id
+            """)
+            )
+            run_id = await conn.scalar(
+                text("""
+                INSERT INTO watch_runs (id, watch_id, status)
+                VALUES (gen_random_uuid(), :watch_id, 'ok')
+                RETURNING id
+            """),
+                {"watch_id": watch_id},
+            )
+            offer_id = await conn.scalar(
+                text("""
+                INSERT INTO offers (id, watch_id, run_id, source, external_id, kind,
+                                     price_krw, freshness)
+                VALUES (gen_random_uuid(), :watch_id, :run_id, 'test-source', 'ext-1', 'flight',
+                        100000, 'live')
+                RETURNING id
+            """),
+                {"watch_id": watch_id, "run_id": run_id},
+            )
+
+            await conn.execute(text("DELETE FROM watches WHERE id = :id"), {"id": watch_id})
+
+            remaining_runs = await conn.scalar(
+                text("SELECT count(*) FROM watch_runs WHERE id = :id"), {"id": run_id}
+            )
+            remaining_offers = await conn.scalar(
+                text("SELECT count(*) FROM offers WHERE id = :id"), {"id": offer_id}
+            )
+        finally:
+            await trans.rollback()
+    assert remaining_runs == 0
+    assert remaining_offers == 0

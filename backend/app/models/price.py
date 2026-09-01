@@ -94,8 +94,11 @@ class PriceSnapshot(Base):
     # --- 커버리지 (스펙 §6) ---
     # ★ 이게 없으면 커버리지 하락을 가격 상승으로 오독한다.
     #   차트만이 아니라 rules.py 도 똑같이 속아 all_time_low 가 오발동한다.
+    # ★ 단위는 둘 다 0~100 퍼센트로 통일한다.
+    #   인접한 두 숫자 칼럼의 스케일이 다르면(하나는 0~1, 하나는 0~100)
+    #   수집기와 UI 사이에서 단위 혼동 버그가 난다.
     coverage_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
-    live_ratio: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    live_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     credits_used: Mapped[int | None] = mapped_column(Integer)
 
     __table_args__ = (Index("ix_snapshots_watch_captured", "watch_id", "captured_at"),)
