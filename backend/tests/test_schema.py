@@ -50,14 +50,66 @@ async def test_all_timestamp_columns_are_timezone_aware(migrated_engine):
 
 
 async def test_watches_destination_is_generated_from_params(migrated_engine):
-    """생성 칼럼이 실제로 동작하는지 확인. Phase 2 추천이 이걸 인덱스로 쓴다."""
-    async with migrated_engine.begin() as conn:
-        await conn.execute(
-            text("""
-            INSERT INTO watches (id, kind, title, params, rules, interval_min, status)
-            VALUES (gen_random_uuid(), 'flight', '테스트',
-                    '{"destination": "FUK"}'::jsonb, '[]'::jsonb, 360, 'active')
-        """)
-        )
-        dest = await conn.scalar(text("SELECT destination FROM watches WHERE title = '테스트'"))
+    """생성 칼럼이 실제로 동작하는지 확인. Phase 2 추천이 이걸 인덱스로 쓴다.
+
+    세션 스코프 DB를 재사용하므로 삽입한 행을 커밋하지 않고 롤백한다.
+    """
+    async with migrated_engine.connect() as conn:
+        trans = await conn.begin()
+        try:
+            await conn.execute(
+                text("""
+                INSERT INTO watches (id, kind, title, params, rules, interval_min, status)
+                VALUES (gen_random_uuid(), 'flight', '테스트',
+                        '{"destination": "FUK"}'::jsonb, '[]'::jsonb, 360, 'active')
+            """)
+            )
+            dest = await conn.scalar(text("SELECT destination FROM watches WHERE title = '테스트'"))
+        finally:
+            await trans.rollback()
     assert dest == "FUK"
+
+
+async def test_watch_runs_cascade_deletes_with_watch(migrated_engine):
+    """watches 행을 지우면 그걸 참조하는 watch_runs 행도 CASCADE로 함께 사라진다.
+    Task 4~6이 같은 ondelete="CASCADE" FK 패턴을 쌓으므로 여기서 한 번 잠가둔다.
+    """
+    async with migrated_engine.connect() as conn:
+        trans = await conn.begin()
+        try:
+            watch_id = await conn.scalar(
+                text("""
+                INSERT INTO watches (id, kind, title, params, rules, interval_min, status)
+                VALUES (gen_random_uuid(), 'flight', 'cascade-test',
+                        '{}'::jsonb, '[]'::jsonb, 360, 'active')
+                RETURNING id
+            """)
+            )
+            run_id = await conn.scalar(
+                text("""
+                INSERT INTO watch_runs (id, watch_id, status)
+                VALUES (gen_random_uuid(), :watch_id, 'ok')
+                RETURNING id
+            """),
+                {"watch_id": watch_id},
+            )
+
+            await conn.execute(text("DELETE FROM watches WHERE id = :id"), {"id": watch_id})
+
+            remaining = await conn.scalar(
+                text("SELECT count(*) FROM watch_runs WHERE id = :id"), {"id": run_id}
+            )
+        finally:
+            await trans.rollback()
+    assert remaining == 0
+
+
+async def test_watches_status_next_run_index_column_order(migrated_engine):
+    """ix_watches_status_next_run 이 (status, next_run_at) 순서로 존재하는지 확인.
+    이후 autogenerate가 인덱스를 흘리거나 칼럼 순서를 바꿔도 이게 잡는다."""
+    async with migrated_engine.connect() as conn:
+        indexdef = await conn.scalar(
+            text("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_watches_status_next_run'")
+        )
+    assert indexdef is not None, "ix_watches_status_next_run 인덱스가 없다"
+    assert "(status, next_run_at)" in indexdef, f"칼럼 순서가 다르다: {indexdef}"

@@ -61,17 +61,14 @@ TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", _DEFAULT_TEST_DATABASE_URL)
 _TEST_DB_NAME = urlsplit(TEST_DB_URL).path.lstrip("/")
 
 
-@pytest.fixture(scope="session")
-async def test_engine():
-    """테스트 DB가 없으면 만들고, 엔진을 준다.
+@pytest.fixture(scope="session", autouse=True)
+async def _ensure_test_database():
+    """세션당 딱 한 번, 테스트 DB가 없으면 만든다.
 
-    NullPool: `asyncio_default_fixture_loop_scope = "session"`(pyproject.toml)은
-    픽스처의 루프 스코프만 세션으로 만든다. 테스트 함수 자체는 기본값(function)이라
-    매 테스트마다 새 이벤트 루프에서 돈다. 세션 스코프인 이 엔진이 커넥션을
-    풀링하면, 테스트 A에서 맺은 asyncpg 커넥션이 A의 루프가 닫힌 뒤에도 풀에
-    남았다가 테스트 B(다른 루프)가 재사용을 시도하며 "Event loop is closed" /
-    "another operation is in progress"로 깨진다. NullPool은 커넥션을 풀링하지
-    않고 매번 새로 맺고 반환 즉시 닫아서 이 문제를 원천 차단한다.
+    autouse + session 스코프라서 세션의 첫 테스트가 시작되기 전에 반드시 실행된다.
+    `test_engine`을 쓰지 않는 테스트(예: test_healthz — app.db.engine을 직접 씀)가
+    먼저 수집·실행되더라도 이 픽스처가 먼저 돌아 trippick_test가 이미 존재하게 만든다.
+    DB 생성 책임은 여기 하나뿐이고, `test_engine`은 이 픽스처에 의존해 중복을 만들지 않는다.
     """
     admin_url = TEST_DB_URL.rsplit("/", 1)[0] + "/postgres"
     admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
@@ -86,6 +83,19 @@ async def test_engine():
             await conn.execute(text(f'CREATE DATABASE "{_TEST_DB_NAME}"'))
     await admin.dispose()
 
+
+@pytest.fixture(scope="session")
+async def test_engine(_ensure_test_database):
+    """테스트 DB에 접속하는 엔진을 준다. DB 생성 자체는 _ensure_test_database 책임.
+
+    NullPool: `asyncio_default_fixture_loop_scope = "session"`(pyproject.toml)은
+    픽스처의 루프 스코프만 세션으로 만든다. 테스트 함수 자체는 기본값(function)이라
+    매 테스트마다 새 이벤트 루프에서 돈다. 세션 스코프인 이 엔진이 커넥션을
+    풀링하면, 테스트 A에서 맺은 asyncpg 커넥션이 A의 루프가 닫힌 뒤에도 풀에
+    남았다가 테스트 B(다른 루프)가 재사용을 시도하며 "Event loop is closed" /
+    "another operation is in progress"로 깨진다. NullPool은 커넥션을 풀링하지
+    않고 매번 새로 맺고 반환 즉시 닫아서 이 문제를 원천 차단한다.
+    """
     eng = create_async_engine(TEST_DB_URL, poolclass=NullPool)
     yield eng
     await eng.dispose()

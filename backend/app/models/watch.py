@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Computed, ForeignKey, Index, Integer, Text
+from sqlalchemy import Computed, ForeignKey, Index, Integer, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,8 +17,12 @@ class Watch(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     rules: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
-    interval_min: Mapped[int] = mapped_column(Integer, nullable=False, default=360)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="active")
+    interval_min: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=360, server_default=text("360")
+    )
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="active", server_default=text("'active'")
+    )
 
     last_run_at: Mapped[datetime | None] = nullable_ts_col()
     # ★ 스케줄의 유일한 진실의 원천. APScheduler job store 를 쓰지 않는다 (docs/02 §7)
