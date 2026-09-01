@@ -313,8 +313,8 @@ alter table offers          add column freshness text not null,      -- live | c
                             add column observed_at timestamptz,      -- 소스가 안 주면 NULL
                             add column verified bool not null default false,
                             add column verify_run_id uuid;
-alter table price_snapshots add column coverage_pct numeric,         -- ★ 아래 주의
-                            add column live_ratio numeric,
+alter table price_snapshots add column coverage_pct numeric,         -- ★ 아래 주의. 0~100
+                            add column live_pct numeric,             -- 0~100 (퍼센트로 통일)
                             add column credits_used int;
 alter table watches         add column last_sampled_at timestamptz;  -- 샘플링 라운드로빈
 alter table watch_runs      add column credits_used int;

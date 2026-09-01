@@ -265,7 +265,7 @@ SAMPLE 결과는 Bright Data에서 오므로 `freshness='live'`다. 즉 샘플�
 | `probe_log` | 신규 (아래) |
 | `app_settings` | 신규 (아래) |
 | `offers` | `freshness` `cache_age_days` `observed_at` `verified` `verify_run_id` 추가 |
-| `price_snapshots` | `coverage_pct` `live_ratio` `credits_used` 추가 |
+| `price_snapshots` | `coverage_pct` `live_pct` `credits_used` 추가 (둘 다 0~100 퍼센트) |
 | `watches` | `last_sampled_at timestamptz` 추가 (샘플링 라운드로빈) |
 | `watch_runs` | `credits_used int` 추가 |
 
@@ -276,8 +276,8 @@ SAMPLE 결과는 Bright Data에서 오므로 `freshness='live'`다. 즉 샘플�
 
 ```sql
 alter table price_snapshots
-  add column coverage_pct numeric,   -- 값이 있는 셀 비율
-  add column live_ratio   numeric,   -- 그중 live 비율
+  add column coverage_pct numeric,   -- 값이 있는 셀 비율. 0~100 (퍼센트)
+  add column live_pct     numeric,   -- 그중 live 비율. 0~100 (퍼센트)
   add column credits_used int;
 ```
 
