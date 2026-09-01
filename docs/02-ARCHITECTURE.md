@@ -18,7 +18,7 @@
 | 테스트 | pytest + pytest-asyncio + respx | respx로 HTTP 목킹 |
 | 린트/포맷 | ruff | black+isort+flake8 대체 |
 
-### 프론트엔드 — Next.js 15 (App Router)
+### 프론트엔드 — Next.js 16 (App Router)
 
 | 영역 | 선택 |
 |---|---|
