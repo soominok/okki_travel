@@ -26,6 +26,25 @@
 
 ---
 
+## I-011 · alembic autogenerate 는 생성 칼럼(Computed)을 diff 하지 못한다
+
+- **날짜** 2026-09-02
+- **증상** `alembic revision --autogenerate` 실행 시 경고:
+  `Computed default on watches.destination cannot be modified`
+- **원인** alembic 은 `GENERATED ALWAYS AS (...) STORED` 칼럼의 **식(expression)을 비교하지
+  못한다.** 최초 생성은 정상 반영되지만, 이후 식을 바꾸면 **감지하지 못하고 조용히 넘어간다**
+- **해결** 지금은 조치 불필요(최초 생성은 정상). 다만 **식을 바꿀 때는 수동 마이그레이션**을
+  써야 한다
+- **교훈**
+  1. **Phase 2 에서 이걸 밟는다.** 취향 추천이 `watches.destination` 을 쓰는데,
+     `StayParams` 에는 `destination` 이 없어 stay watch 는 이 칼럼이 항상 NULL 이다.
+     숙소 목적지도 인덱싱하려면 생성 칼럼 식을 `kind` 별로 분기해야 하고,
+     **그때 autogenerate 는 아무것도 만들어주지 않는다**
+  2. 생성 칼럼·확장(EXTENSION)·트리거처럼 autogenerate 가 못 보는 것들은
+     마이그레이션을 손으로 쓴다는 것을 전제로 설계한다
+
+---
+
 ## I-010 · compose up 직후 pytest 를 돌리면 전부 에러난다 (거짓 빨간불)
 
 - **날짜** 2026-09-02

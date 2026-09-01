@@ -8,6 +8,97 @@
 
 ---
 
+## 2026-09-01~02 · 계획 1(기반) 실행 — Task 1~7의 판단 기록
+
+> Task 8 항목은 아래에 따로 있다. 이 항목은 **Task 1~7에서 내린 결정과 그 근거**를 담는다.
+> 원본은 서브에이전트 작업 ledger(`.superpowers/`, gitignore 대상)에 있었고,
+> 병합하면 사라지므로 여기로 옮긴다.
+
+### 실행 방식
+
+superpowers의 subagent-driven-development로 8개 태스크를 돌렸다. 태스크마다
+`impl`(Sonnet)이 구현하고 `reviewer`(Opus/Sonnet)가 검토했으며, 지적이 나오면
+수정 라운드를 돌고 범위를 좁힌 재리뷰로 확인했다. 커밋 31개.
+
+### 되돌리기 어려웠던 결정들
+
+**호스트 DB 포트를 5434로.** 이 머신의 5432·5433을 무관한 다른 프로젝트 컨테이너
+(`stock_ai_db`, `budongsan_ai-db-1`)가 점유하고 있었다. 컨테이너 내부는 `db:5432`
+그대로고, `.env`의 `DATABASE_URL`만 `localhost:5434`를 가리킨다. compose가
+api/worker에 `environment:`로 컨테이너용 값을 따로 주입하므로 둘이 공존한다.
+
+**시크릿을 `SecretStr`로.** `APP_API_TOKEN`이 짧으면 pydantic이 ValidationError에
+**토큰 값을 평문으로** 찍고 그게 `docker compose logs`로 흘러간다. Plan 2에서 어댑터
+6개가 `settings.<token>`을 `str`로 소비하기 시작하면 `.get_secret_value()`를 전부
+따라다녀야 하므로 되돌리기 비용이 태스크마다 커진다 — 그래서 지금 넣었다.
+
+**컨테이너 TZ를 UTC로.** `.env`의 `TZ=Asia/Seoul`이 api/worker에 주입돼 APScheduler가
+KST로 돌고 있었다(로그에 `next run at: ... KST`). structlog는 이미 UTC라 로그와
+스케줄러가 갈라진 상태였다. compose에서 `TZ: UTC`로 덮고 `AsyncIOScheduler(timezone="UTC")`를
+명시했다. KST는 표시 계층에서만 붙인다(절대 규칙 4).
+
+**`Base.metadata`에 naming convention.** 없으면 PK/FK/UNIQUE/CHECK가 Postgres 서버
+생성 이름을 받고, autogenerate가 만드는 `op.drop_constraint(None, ...)` 때문에
+downgrade가 실패한다. 테이블 13개가 얹히기 전이 가장 쌌다 — 나중이면 전 제약을
+개명하는 마이그레이션을 따로 써야 한다.
+
+**`live_ratio` → `live_pct`, 둘 다 0~100.** `coverage_pct`(0~100 암시)와
+`live_ratio`(0~1 암시)가 인접한 숫자 칼럼인데 스케일이 갈렸다. Plan 3의 수집기가
+`live/total`로 계산하면 자연히 0~1이 나오고 UI가 옆 칼럼을 보고 퍼센트로 취급하면
+"0.4%"를 표시하게 된다. 이름이 그렇게 유도한다. 소비자가 없는 지금이 가장 쌌다.
+
+**`WatchCreate.kind`에서 `package` 제거.** `WatchParams`에 `PackageParams` variant가
+없어 `kind="package"`는 항상 검증 실패했다. 문제는 실패가 아니라 **실패하는 방식**이다 —
+API가 만들 수 없는 값을 받아들이는 척하면 사용자는 "미지원" 대신 discriminator
+에러를 받는다. Phase 2에서 `PackageParams`를 만들 때 되돌린다.
+
+**`import "server-only"` 가드.** `web/lib/api.ts`의 `serverFetch`를 클라이언트
+컴포넌트가 import하면 `APP_API_TOKEN`이 번들에 박힌다. 지금은 소비자가 0개라 안전한
+것뿐이고, Plan 5가 이 파일을 쓰게 된다. 가드는 그 실수를 **빌드 타임 에러**로 만든다.
+
+### 내가 틀렸던 판단 4건
+
+기록해두는 이유는 같은 방식으로 또 틀리지 않기 위해서다.
+
+1. **이벤트 루프 충돌 표면을 작다고 봤다.** "Task 3~6은 별도 세션 스코프 엔진을 쓰니
+   충돌이 작다"고 판단했는데 정반대였다 — 세션 스코프 엔진이 문제를 **키운다**.
+   리뷰어가 재현해서 반박했고 `poolclass=NullPool`로 해결했다.
+2. **lint 면제로 덮으려 했다.** autogenerate 산출물이 ruff에 걸리자 per-file-ignores를
+   지시했는데, 측정해보니 `CLAUDE.md`의 표준 명령(`ruff check --fix && ruff format`)이
+   위반 7건을 전부 없앴다. 설정 예외를 만들 이유가 없었다.
+3. **CASCADE 테스트 근거가 틀렸다.** "`run_id`가 CASCADE가 아니면 watches 삭제가
+   FK violation으로 죽는다"고 적었는데, `offers`는 `watches`로 가는 FK가 두 개라
+   `watch_id` 경로가 결과를 만들어냈다. **아무것도 검증하지 않는 테스트**를 만들게 했다
+   (I-006). psql 롤백 트랜잭션으로 실측해 확인하고 고쳤다.
+4. **지시문에 항목을 빠뜨렸다.** 죽은 픽스처(`anyio_backend`) 제거를 승격하기로 해놓고
+   실제 지시에는 안 넣어서, 계획서에서만 지워지고 코드에는 남았다. ledger를 다시 읽다
+   발견했다.
+
+### 반복해서 드러난 실패 모드
+
+`docs/ISSUES.md` 11건 중 절반 이상이 **"통과했지만 아무것도 확인하지 않은"** 부류다
+(I-005 옛 스키마로 통과, I-006 중복 FK 경로, I-009 private route로 빌드 제외,
+I-010 거짓 빨간불). 그래서 이 프로젝트에서는 **안전장치를 넣으면 일부러 깨서
+정말 막히는지 확인**하는 것을 관행으로 삼았다. 롤백 트랜잭션 안에서
+`ALTER TABLE ... DROP/ADD CONSTRAINT`로 안전하게 할 수 있다.
+
+### 아직 안 정한 것 — Plan 2~4가 부딪힌다
+
+- **`sample_cap_ratio`의 진실의 원천이 둘이다.** `config.py`(env)와 스펙 §6의
+  `app_settings['sampling_policy']`(DB). 스펙은 "재배포 없이 설정 화면에서 수정"을
+  요구하므로 **DB가 권위**여야 하고 env는 seed 값이다. `brightdata_monthly_credits`
+  ↔ `call_budgets.total`도 같은 구조. **Plan 2 계획서에서 못 박아야 한다.**
+- **`QUIET_HOURS`가 어느 시간대인지 코드가 모른다.** `.env.example` 주석은 KST라는데
+  컨테이너는 UTC로 돌고 `config.py`의 `quiet_hours_start/end`는 tz 없는 naive `time`이다.
+  Plan 4 디스패처가 `datetime.now(UTC).time()`과 비교하면 9시간 어긋난다.
+  절대 규칙 4("KST 변환은 표시 계층에서만")는 이 경우에 답을 주지 않는다 —
+  quiet hours는 표시가 아니라 **판정 로직**이다. **Plan 4 전에 정해야 한다.**
+- **`app/db.py`가 임포트 시점에 엔진을 만든다.** Plan 3의 collector가 `SessionLocal`을
+  직접 import하면 테스트 이음매가 없어진다. 그 전에 `get_engine()` lru_cache로 바꾸거나,
+  collector가 sessionmaker를 인자로 받는 형태를 Plan 3 계획 시점에 정한다.
+
+---
+
 ## 2026-09-01 · 계획 1(기반) 완료 — Task 8 웹 스캐폴딩
 
 ### 한 일

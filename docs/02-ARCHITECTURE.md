@@ -573,9 +573,14 @@ Cloud Scheduler / EventBridge / cron이 60초마다 호출하는 것으로 **워
 # --- Core ---
 APP_ENV=local
 APP_API_TOKEN=change-me-to-a-long-random-string
-DATABASE_URL=postgresql+asyncpg://trip:trip@db:5432/trippick
-TZ=Asia/Seoul
+# ⚠️ 호스트 측 명령(alembic·pytest·로컬 uvicorn)만 이 값을 쓴다.
+#    compose 가 api/worker 컨테이너에는 environment: 로 db:5432 를 따로 주입한다.
+#    호스트 포트가 5434 인 이유: 5432·5433 을 다른 프로젝트 컨테이너가 점유 중이었다.
+DATABASE_URL=postgresql+asyncpg://trip:trip@localhost:5434/trippick
+TZ=Asia/Seoul                  # 표시 계층용. 컨테이너는 compose 가 TZ=UTC 로 덮는다
 PUBLIC_WEB_URL=http://localhost:3000
+LOG_LEVEL=INFO
+API_BASE_URL=http://api:8000   # web 서버 사이드 전용. NEXT_PUBLIC_ 금지
 
 # --- Sources (없으면 해당 어댑터만 비활성) ---
 TRAVELPAYOUTS_TOKEN=
@@ -584,6 +589,7 @@ BRIGHTDATA_API_KEY=
 BRIGHTDATA_MONTHLY_CREDITS=5000
 BRIGHTDATA_SAMPLE_CAP_RATIO=0.70
 DATA_GO_KR_KEY=
+EXIM_API_KEY=                  # 환율 폴백 (koreaexim.go.kr)
 
 # --- Notify ---
 NOTIFY_CHANNELS=slack,inapp
@@ -595,6 +601,7 @@ QUIET_HOURS=23:00-08:00        # 이 시간대는 great 등급만 발송
 
 # --- Collect ---
 DEFAULT_INTERVAL_MIN=360
+OFFER_RETENTION_DAYS=90
 VERIFY_THRESHOLD_RATIO=1.15    # 목표가의 115% 이내면 Bright Data로 실가격 검증
 CRAWL_ENABLED=false            # 기본 off. 켜도 policy.py 게이트를 통과해야 함
 CRAWL_MIN_INTERVAL_SEC=5
