@@ -48,3 +48,15 @@ def setup_logging(level: str = "INFO") -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(level_value)
+
+    # uvicorn은 자체 dictConfig로 이 로거들에 자기 핸들러(평문)를 달고
+    # propagate=False로 root와 끊어놓는다. 그 dictConfig는 여기(FastAPI startup
+    # 이벤트에서 호출되는 setup_logging())보다 먼저 실행되므로, 핸들러를 비우고
+    # propagate를 되살려 root의 JSON 핸들러로 흘러가게 한다.
+    # 주의: uvicorn --reload 의 부모 reloader 프로세스가 찍는 줄
+    # ("Will watch for changes...")은 앱 코드를 아예 임포트하지 않아 이 함수가
+    # 호출될 일이 없다 — 개발 전용 경로라 여기서 잡지 않는다.
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.propagate = True

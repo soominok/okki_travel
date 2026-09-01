@@ -45,6 +45,28 @@ def test_lowercase_log_level_does_not_crash():
     setup_logging("info")
 
 
+def test_uvicorn_loggers_are_rewired_to_root_json_handler(capsys):
+    """uvicorn은 자체 dictConfig로 시작 시 uvicorn/uvicorn.access 로거에 자기 핸들러를
+    달고 propagate를 False로 끊는다(그게 setup_logging()보다 먼저 실행된다). 이 테스트는
+    uvicorn이 만든 상태를 재현한 뒤, setup_logging()이 그걸 되돌려 root의 JSON 핸들러로
+    흐르게 하는지 확인한다. 특히 access 로그(요청 라인)가 이 수정의 핵심 대상이다."""
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers = [logging.StreamHandler()]  # uvicorn이 붙였을 법한 평문 핸들러
+    uvicorn_access.propagate = False
+
+    setup_logging("INFO")
+
+    uvicorn_access.info('127.0.0.1:1234 - "GET /healthz HTTP/1.1" 200 OK')
+
+    out = capsys.readouterr().out.strip()
+    lines = [line for line in out.splitlines() if line]
+    assert len(lines) == 1, f"uvicorn.access 로그가 한 줄의 JSON이어야 한다: {out!r}"
+
+    payload = json.loads(lines[0])
+    assert payload["logger"] == "uvicorn.access"
+    assert payload["level"] == "info"
+
+
 def test_structlog_logger_output_is_still_valid_json(capsys):
     """structlog 쪽 로거도 여전히 정상 동작해야 한다 (회귀 방지)."""
     import structlog
