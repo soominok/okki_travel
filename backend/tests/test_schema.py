@@ -113,3 +113,32 @@ async def test_watches_status_next_run_index_column_order(migrated_engine):
         )
     assert indexdef is not None, "ix_watches_status_next_run 인덱스가 없다"
     assert "(status, next_run_at)" in indexdef, f"칼럼 순서가 다르다: {indexdef}"
+
+
+async def test_offers_price_is_integer_not_float(migrated_engine):
+    """CLAUDE.md 5번: 가격은 원화 정수. float 금지."""
+    cols = await _columns(migrated_engine, "offers")
+    assert cols["price_krw"]["type"].python_type is int
+
+
+async def test_offers_has_freshness_columns(migrated_engine):
+    """스펙 §6: 사용자에게 신선도를 보여주려면 이 칼럼들이 필요하다."""
+    cols = await _columns(migrated_engine, "offers")
+    for name in ("freshness", "cache_age_days", "observed_at", "verified", "verify_run_id"):
+        assert name in cols, f"offers.{name} 누락"
+
+
+async def test_offers_unique_uses_run_id_not_collected_at(migrated_engine):
+    """A1 검토 발견 사항: collected_at 을 unique 에 넣으면 행마다 now() 라
+    튜플이 항상 달라져서 중복을 전혀 못 막는다. run_id 를 써야 한다."""
+    async with migrated_engine.connect() as conn:
+        constraints = await conn.run_sync(lambda c: inspect(c).get_unique_constraints("offers"))
+    cols = {tuple(sorted(c["column_names"])) for c in constraints}
+    assert ("external_id", "run_id", "source", "watch_id") in cols, cols
+
+
+async def test_snapshots_have_coverage_columns(migrated_engine):
+    """coverage_pct 가 없으면 커버리지 하락을 가격 상승으로 오독한다 (스펙 §6)."""
+    cols = await _columns(migrated_engine, "price_snapshots")
+    for name in ("coverage_pct", "live_ratio", "credits_used"):
+        assert name in cols, f"price_snapshots.{name} 누락"
