@@ -12,7 +12,7 @@
 | ORM | SQLAlchemy 2.0 (async) + Alembic | 마이그레이션 필수 |
 | 검증 | Pydantic v2 / pydantic-settings | 설정도 Pydantic으로 |
 | HTTP 클라이언트 | httpx (async) + tenacity | 재시도/백오프 |
-| 스케줄러 | APScheduler 3.x (SQLAlchemyJobStore) | 잡 상태를 Postgres에 저장 → 재시작 내성 |
+| 스케줄러 | APScheduler 3.x (**메모리 전용**, job store 없음) | 60초 틱 1개만. 스케줄의 진실은 `watches.next_run_at` (§7) |
 | 크롤링(보조) | Playwright (Python) | 정책 게이트 통과 시에만 |
 | 로깅 | structlog (JSON) | 클라우드 이전 대비 |
 | 테스트 | pytest + pytest-asyncio + respx | respx로 HTTP 목킹 |
@@ -52,7 +52,8 @@
                           │   Postgres :5432    │
                           │  watches, snapshots,│
                           │  offers, alerts,    │
-                          │  apscheduler_jobs   │
+                          │  call_budgets,      │
+                          │  coverage_cells     │
                           └──────────▲──────────┘
                                      │
 ┌────────────────────────────────────┴─────────────────────────┐
@@ -199,6 +200,8 @@ watch_runs (
   sources_failed jsonb,                  -- {source: error}
   offers_found   int,
   best_price_krw int,
+  credits_used   int,          -- 스펙 §6 (유료 소스 소모량)
+  note           text,         -- 커버리지 게이트 보류 사유 등
   error          text
 )
 
