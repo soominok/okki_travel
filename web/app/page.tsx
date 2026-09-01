@@ -1,7 +1,8 @@
+import { serverFetch } from "@/lib/api";
+
 async function getHealth() {
-  const base = process.env.API_BASE_URL ?? "http://api:8000";
   try {
-    const res = await fetch(`${base}/healthz`, { cache: "no-store" });
+    const res = await serverFetch("/healthz");
     return await res.json();
   } catch {
     return { status: "unreachable", db: "unknown" };
