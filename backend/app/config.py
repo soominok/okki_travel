@@ -73,9 +73,7 @@ class Settings(BaseSettings):
     def _quiet_hours_format(cls, v: str) -> str:
         v = v.strip()
         if not _QUIET_HOURS_RE.match(v):
-            raise ValueError(
-                "quiet_hours must be 'HH:MM-HH:MM' (e.g. 23:00-08:00)"
-            )
+            raise ValueError("quiet_hours must be 'HH:MM-HH:MM' (e.g. 23:00-08:00)")
         start_s, end_s = v.split("-")
         try:
             time.fromisoformat(start_s)

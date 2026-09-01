@@ -17,8 +17,6 @@ def setup_logging(level: str = "INFO") -> None:
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelNamesMapping()[level]
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelNamesMapping()[level]),
         cache_logger_on_first_use=True,
     )
