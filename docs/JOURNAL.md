@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-09-01 · 계획 1(기반) 완료 — Task 8 웹 스캐폴딩
+
+### 한 일
+
+1. `npx create-next-app@latest` 로 `web/` 초기화 (Next 16.3.4, React 19.2.8)
+2. `web/lib/api.ts` 의 `serverFetch` 와 `web/app/api/health/route.ts` 프록시로
+   브라우저가 백엔드 토큰을 직접 다루지 않게 함 (A1에서 지적된 오류 4)
+3. `docker-compose.yml` 의 `web` 서비스를 **처음으로** 실제 기동해 4서비스 전체 확인
+4. `README.md`/`docs/02-ARCHITECTURE.md`/계획서의 "Next.js 15" 표기를 16으로 정정
+
+### 왜 이렇게 정했나
+
+**Next 15 → 16을 그대로 수용한 이유.** 계획서와 스펙은 작성 시점 기준 최신인 15를
+전제했지만, `create-next-app@latest` 가 실제로 설치한 건 16.3.4였다. 그린필드
+프로젝트에서 이미 존재하는 코드가 없으니 굳이 구버전으로 핀할 이유가 없었고,
+Route Handler 컨벤션은 15→16 사이 breaking change가 없어 브리프의 코드를 그대로
+쓸 수 있었다(`node_modules/next/dist/docs`로 실제 확인). "훈련 데이터 기준으로
+단정하지 않는다"(I-002의 교훈)를 프론트 스택에도 그대로 적용한 것.
+
+**검증에 curl을 쓴 이유.** 이 세션엔 브라우저 도구가 없어 브리프 Step 6의
+스크린샷 요구를 curl 기반 확인으로 대체했다. `grep -o "백엔드 [^<]*"` 로
+단순 매칭했더니 React 하이드레이션 주석(`<!-- -->`)이 텍스트 노드를 쪼개면서
+정규식이 RSC payload까지 그리디하게 삼켜 지저분한 결과가 나왔다 — 실제 렌더링은
+정상이었고(`<span class="text-sm">백엔드 <!-- -->연결됨<!-- --> · DB <!-- -->ok</span>`),
+grep 패턴의 한계였을 뿐이다. 이후 세션에서 같은 패턴으로 확인할 때는
+`<span class="text-sm">.*</span>` 처럼 태그 경계로 잘라야 오독하지 않는다.
+
+**세션 중단 후 재개.** Rate limit으로 작업이 중간에 끊겼는데, 코디네이터가
+"처음부터 다시 하지 마라"며 현재 상태를 정확히 짚어줘서 `web/lib/api.ts` 이후
+스텝부터 이어갈 수 있었다. 재개 시점에 포트 3000을 잔여 `node.exe` 프로세스가
+점유하고 있었고 첫 `up -d --build` 에서 worker가 메모리 부족으로 죽었는데,
+둘 다 코드 문제가 아니라 이전 시도의 잔여 리소스 경합이었다 — 죽이고 재시도로 해결.
+
+**pytest를 컨테이너 안에서 먼저 돌려서 헛짚었던 것.** `docker compose exec api
+uv run pytest` 를 시도했다가 39개 전부 `OSError: Connect call failed`로 실패했다.
+`.env`의 `DATABASE_URL`이 호스트 전용(`localhost:5434`)인데 컨테이너 안에서는
+그 주소가 무의미하기 때문 — `CLAUDE.md` 명령어 목록이 애초에 `uv run pytest`를
+호스트 명령으로 적어둔 걸 놓쳤다. 호스트에서 재실행해 39개 전부 통과 확인.
+
+### 다음
+
+계획 1(기반) 완료. `docker compose up` 한 번으로 4서비스가 뜨고, `/healthz` 프록시가
+동작하고, 토큰이 클라이언트 번들에 없다는 것까지 확인됐다. 다음은 계획 2(소스 계층) —
+스파이크(`python spikes/travelpayouts_probe.py`) 결과가 선행 조건이다.
+
+---
+
 ## 2026-09-01 · A1 설계 검토와 소스 계층 재설계
 
 ### 한 일
