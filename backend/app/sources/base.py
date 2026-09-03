@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
@@ -62,8 +62,8 @@ class Offer(BaseModel):
     @field_validator("collected_at", "observed_at", mode="after")
     @classmethod
     def _must_be_utc(cls, v: datetime | None) -> datetime | None:
-        if v is not None and v.tzinfo is None:
-            raise ValueError("datetime must be timezone-aware (UTC)")
+        if v is not None and v.utcoffset() != timedelta(0):
+            raise ValueError("datetime must be UTC (got naive or non-UTC timezone-aware)")
         return v
 
 

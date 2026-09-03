@@ -95,6 +95,10 @@ class BrightDataAdapter:
 
     async def fetch(self, req: FetchRequest) -> SourceResult:
         # fan-out 금지: 단일 출발일(depart_from)만 처리한다. 기간 분할은 collector가 한다.
+        if req.currency.upper() != "KRW":
+            return SourceResult(
+                ok=False, error=f"BrightDataAdapter only supports KRW; got {req.currency.upper()}"
+            )
         return_date: date | None = None
         if req.nights_min is not None:
             return_date = req.depart_from + timedelta(days=req.nights_min)
@@ -124,10 +128,6 @@ class BrightDataAdapter:
 
             body = resp.json()
             currency = req.currency.upper()
-            if currency != "KRW":
-                return SourceResult(
-                    ok=False, data=[], error=f"BrightDataAdapter only supports KRW; got {currency}"
-                )
 
             best = body.get("best_flights") or []
             other = body.get("other_flights") or []

@@ -75,3 +75,10 @@ async def test_http_error_returns_ok_false():
 
     assert result.ok is False
     assert result.error is not None
+
+
+@pytest.mark.asyncio
+async def test_non_krw_currency_rejected():
+    result = await _adapter().fetch(_req(currency="USD"))
+    assert result.ok is False
+    assert "KRW" in (result.error or "")

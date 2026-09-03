@@ -32,6 +32,10 @@ class HotellookAdapter:
         return bool(self._token)
 
     async def fetch(self, req: FetchRequest) -> SourceResult:
+        if req.currency.upper() != "KRW":
+            return SourceResult(
+                ok=False, error=f"HotellookAdapter only supports KRW; got {req.currency.upper()}"
+            )
         check_in = req.depart_from
         if req.nights_min is not None:
             nights = req.nights_min
@@ -56,10 +60,6 @@ class HotellookAdapter:
             resp.raise_for_status()
 
             currency = req.currency.upper()
-            if currency != "KRW":
-                return SourceResult(
-                    ok=False, data=[], error=f"HotellookAdapter only supports KRW; got {currency}"
-                )
 
             data = resp.json()
             if not isinstance(data, list):

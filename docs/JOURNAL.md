@@ -17,13 +17,12 @@
 Plan 4에서 collector가 `app_settings`를 읽기 시작할 때 이관한다.
 Plan 2에서는 재배포가 허용되고 DB 레이어가 아직 없으므로 `config.py`에 두는 것이 맞다.
 
-### CrawlPolicy.require_enabled() — os.environ 직접 읽기 (CLAUDE.md §3 예외 처리)
+### CrawlPolicy.require_enabled() — get_settings() 경유
 
-`policy.py`는 `os.environ.get("CRAWL_ENABLED")` 를 직접 읽는다.
-CLAUDE.md §3은 "시크릿은 config.py 경유"이지만 `CRAWL_ENABLED`는 시크릿이 아닌
-기능 플래그다. 더 중요한 이유: `get_settings()`는 `lru_cache`로 묶여 있어
-`monkeypatch.setenv`가 통하지 않는다. 테스트 가능성을 희생하면서까지 config.py를
-경유할 실익이 없다. Plan 4에서 crawl 어댑터 구현 시 이 구조가 바뀌면 그때 재검토.
+`policy.py`는 `get_settings().crawl_enabled`를 읽는다. `config.py`에 이미
+`crawl_enabled: bool = False` 필드가 있으므로 §3("시크릿은 config.py 경유")을
+자연스럽게 준수한다. 테스트에서 `lru_cache` 우회는 `monkeypatch.setattr(
+"app.sources.policy.get_settings", lambda: Settings(...))` 패턴으로 해결.
 
 ### Bright Data API URL 검증
 
