@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.sources.base import FetchRequest, Offer, SourceResult
+from app.sources.base import FetchRequest, Offer, SourceAdapter, SourceCapability, SourceResult
 
 
 def _offer(**kw) -> dict:
@@ -47,7 +47,7 @@ class TestFetchRequest:
         assert req.currency == "KRW"
 
     def test_date_order_rejected(self):
-        with pytest.raises(ValidationError, match="depart_to"):
+        with pytest.raises(ValidationError, match="depart_to must be >= depart_from"):
             FetchRequest(
                 origin="ICN",
                 destination="FUK",
@@ -70,6 +70,10 @@ class TestOffer:
         with pytest.raises(ValidationError):
             Offer(**_offer(price_krw=220000.5))  # float 거부
 
+    def test_price_bool_rejected(self):
+        with pytest.raises(ValidationError):
+            Offer(**_offer(price_krw=True))  # bool 거부
+
     def test_valid_offer(self):
         o = Offer(**_offer())
         assert o.price_krw == 220000
@@ -79,6 +83,72 @@ class TestOffer:
         o = Offer(**_offer(freshness="live", cache_age_days=None))
         assert o.freshness == "live"
         assert o.cache_age_days is None
+
+    def test_naive_collected_at_rejected(self):
+        with pytest.raises(ValidationError, match="timezone-aware"):
+            Offer(**_offer(collected_at=datetime(2026, 1, 1)))  # naive → 거부
+
+
+class TestSourceCapability:
+    def test_valid_capability(self):
+        cap = SourceCapability(
+            role="scan",
+            date_range_native=True,
+            max_span_days=31,
+            trip_length_filter=False,
+            cost_per_call=0,
+            freshness="cached",
+            max_cache_age_days=7,
+        )
+        assert cap.role == "scan"
+        assert cap.cost_per_call == 0
+
+    def test_verify_role(self):
+        cap = SourceCapability(
+            role="verify",
+            date_range_native=False,
+            max_span_days=1,
+            trip_length_filter=False,
+            cost_per_call=1,
+            freshness="live",
+            max_cache_age_days=None,
+        )
+        assert cap.freshness == "live"
+
+
+class TestSourceAdapterProtocol:
+    def test_conforming_class_isinstance(self):
+        """Protocol을 구현하는 클래스가 isinstance 체크를 통과하는가."""
+
+        class MockAdapter:
+            name = "mock"
+            kind = "flight"
+            capability = SourceCapability(
+                role="scan",
+                date_range_native=True,
+                max_span_days=31,
+                trip_length_filter=False,
+                cost_per_call=0,
+                freshness="cached",
+                max_cache_age_days=7,
+            )
+
+            async def health(self) -> bool:
+                return True
+
+            async def fetch(self, req: FetchRequest) -> SourceResult:
+                return SourceResult(ok=True)
+
+        adapter = MockAdapter()
+        assert isinstance(adapter, SourceAdapter)
+
+    def test_missing_fetch_fails_isinstance(self):
+        class BrokenAdapter:
+            name = "broken"
+            kind = "flight"
+            capability = None
+
+        assert not isinstance(BrokenAdapter(), SourceAdapter)
 
 
 class TestSourceResult:

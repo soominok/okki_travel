@@ -52,11 +52,18 @@ class Offer(BaseModel):
     cache_age_days: int | None = None
     observed_at: datetime | None = None
 
-    @field_validator("price_krw")
+    @field_validator("price_krw", mode="before")
     @classmethod
-    def _price_must_be_int(cls, v: int) -> int:
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise ValueError("price_krw must be a plain int, not float or bool")
+    def _price_must_be_int(cls, v: object) -> object:
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError(f"price_krw must be a plain int, got {type(v).__name__}")
+        return v
+
+    @field_validator("collected_at", "observed_at", mode="after")
+    @classmethod
+    def _must_be_utc(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware (UTC)")
         return v
 
 

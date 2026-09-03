@@ -61,7 +61,7 @@ TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", _DEFAULT_TEST_DATABASE_URL)
 _TEST_DB_NAME = urlsplit(TEST_DB_URL).path.lstrip("/")
 
 
-@pytest.fixture(scope="session", autouse=False)
+@pytest.fixture(scope="session", autouse=True)
 async def _ensure_test_database():
     """세션당 딱 한 번, 테스트 DB가 없으면 만든다.
 
