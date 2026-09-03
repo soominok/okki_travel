@@ -8,29 +8,23 @@
 ## 한눈에
 
 ```
-단계       계획 1(기반) 완료 · 스파이크 완료 · 계획 2(소스 계층) 착수 가능
-코드       backend(44 테스트 통과) + web(Next 16) · docker compose 4서비스 기동 · 커밋 36개
-블로커     없음. Bright Data 키 발급 후 SAMPLE/VERIFY 어댑터 구현 가능
-다음 할 일 계획 2(소스 계층) 작성·실행
+단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 착수 가능
+코드       backend(91 테스트 통과) + web(Next 16) · docker compose 4서비스 기동 · 커밋 43개
+블로커     없음
+다음 할 일 계획 3(수집 엔진) — Watch 수동 실행 → 스냅샷 생성
 ```
 
 ## 지금 당장 할 일
 
-### 1. Bright Data API 키 발급
+### 계획 3(수집 엔진) 작성·실행
 
-- [x] **Travelpayouts** — 2026-09-02 완료. 토큰 발급·스파이크 통과
-- [x] **Bright Data** — 2026-09-02 완료. SERP API, 카드 없이 발급 (가정 A5 확인)
+계획 2 완료. 다음: 계획 3(수집 엔진) — Watch를 읽어 어댑터를 호출하고 스냅샷을 저장하는 collector 구현.
 
-### 2. 계획 2(소스 계층) 작성·실행
-
-스파이크 완료, 설계 확정. **계획서 작성 완료** (`docs/superpowers/plans/2026-09-02-02-source-layer.md`).
-다음: 계획 2 실행 (Subagent-Driven 또는 Inline).
-
-**스파이크 핵심 결과 (2026-09-02):**
-- 판정: 🟠 커버리지 얇음 → **설계 유지, SAMPLE 단계 필수**
-- `grouped_prices` 주력 확정 (1회 호출로 10일치, `return_at` 포함)
-- 3개월 SCAN = 4회 API 호출 (예산 안전)
-- 결과 저장: `spikes/probe_result.json`
+**계획 2 완료 현황 (2026-09-03):**
+- Task 4: TravelpayoutsAdapter (flight/scan)
+- Task 5: BrightDataAdapter (flight/verify)
+- Task 6: HotellookAdapter (stay/scan)
+- Task 7: SourceRegistry + CrawlPolicy — 91 테스트 모두 통과
 
 ---
 
@@ -56,14 +50,15 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 | # | 계획 | 산출물 | 스파이크 필요 | 문서 |
 |---|---|---|---|---|
 | 1 | **기반** | ✅ 완료 — `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
-| 2 | 소스 계층 | 실제 가격을 가져오는 어댑터 + 예산 | ✅ | 미작성 |
+| 2 | **소스 계층** | ✅ 완료 — 3개 어댑터 + 예산 + 레지스트리, 91 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-02-02-source-layer.md) |
 | 3 | 수집 엔진 | Watch 수동 실행 → 스냅샷 생성 | ✅ | 미작성 |
 | 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | 미작성 |
 | 5 | 프론트엔드 | 5화면 | ❌ | 미작성 |
 
 - [x] **계획 1 실행** — 완료 (2026-09-01, 커밋 `c246659`)
 - [x] **스파이크 실행** — 완료 (2026-09-02). 판정 🟠, 설계 유지
-- [ ] 계획 2~5 작성 및 실행
+- [x] **계획 2 실행** — 완료 (2026-09-03, 커밋 `187a7ba`). 91 테스트 통과
+- [ ] 계획 3~5 작성 및 실행
 - [ ] E2E 검증 (`PROMPTS.md` P9)
 - [ ] 리뷰·하드닝 (`PROMPTS.md` P10)
 

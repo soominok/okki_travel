@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-09-03 · 계획 2(소스 계층) Task 7 — SourceRegistry + CrawlPolicy
+
+### sample_cap_ratio 권위: config.py (Plan 2) → app_settings DB (Plan 4 이후)
+
+`brightdata_sample_cap_ratio`는 지금 `config.py`의 `float` 필드로 관리된다.
+스펙 §6이 "재배포 없이 수정"을 요구하므로 장기적으로는 `app_settings` DB가 권위여야 한다.
+Plan 4에서 collector가 `app_settings`를 읽기 시작할 때 이관한다.
+Plan 2에서는 재배포가 허용되고 DB 레이어가 아직 없으므로 `config.py`에 두는 것이 맞다.
+
+### CrawlPolicy.require_enabled() — os.environ 직접 읽기 (CLAUDE.md §3 예외 처리)
+
+`policy.py`는 `os.environ.get("CRAWL_ENABLED")` 를 직접 읽는다.
+CLAUDE.md §3은 "시크릿은 config.py 경유"이지만 `CRAWL_ENABLED`는 시크릿이 아닌
+기능 플래그다. 더 중요한 이유: `get_settings()`는 `lru_cache`로 묶여 있어
+`monkeypatch.setenv`가 통하지 않는다. 테스트 가능성을 희생하면서까지 config.py를
+경유할 실익이 없다. Plan 4에서 crawl 어댑터 구현 시 이 구조가 바뀌면 그때 재검토.
+
+### Bright Data API URL 검증
+
+`BD_SERP_URL = "https://api.brightdata.com/serp"` — 대시보드 직접 확인 완료.
+Task 5 구현 당시 ISSUES.md에 "미확인" 으로 남겼으나, 실제 .env 키와 테스트로
+`BrightDataAdapter`가 정상 동작함을 확인 (test_adapter_brightdata.py 4개 PASS).
+
+### 레지스트리 설계: 단순 리스트
+
+`SourceRegistry._adapters: list[SourceAdapter]` — dict 인덱스(name→adapter, kind→adapters)
+대신 단순 리스트를 선택했다. Plan 2 어댑터는 3개뿐이고 O(n) 탐색 비용이 무시 가능하다.
+Plan 3 collector가 `get(kind, role)`을 반복 호출하기 시작하면 그때 최적화한다.
+
+---
+
 ## 2026-09-01~02 · 계획 1(기반) 실행 — Task 1~7의 판단 기록
 
 > Task 8 항목은 아래에 따로 있다. 이 항목은 **Task 1~7에서 내린 결정과 그 근거**를 담는다.
