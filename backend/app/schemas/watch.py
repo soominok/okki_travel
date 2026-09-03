@@ -6,6 +6,7 @@ params 는 kind 에 따라 완전히 다른 필드를 가지므로 discriminated
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -159,5 +160,5 @@ class SnapshotOut(BaseModel):
     min_price_krw: int
     median_price_krw: int | None = None
     offer_count: int | None = None
-    coverage_pct: float | None = None
+    coverage_pct: Decimal | None = None
     credits_used: int | None = None

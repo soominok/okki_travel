@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.routes.watches import router as watches_router
 from app.config import get_settings
 from app.db import engine
 from app.logging import setup_logging
@@ -22,8 +23,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TripPick API", version="0.1.0", lifespan=lifespan)
-
-from app.api.routes.watches import router as watches_router  # noqa: E402
 
 app.include_router(watches_router)
 
