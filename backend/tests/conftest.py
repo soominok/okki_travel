@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 # 테스트 DB URL의 단일 정의처. pytest_configure의 기본값과 test_engine이 각자
@@ -141,3 +141,18 @@ async def migrated_engine(test_engine):
     assert upgrade_result.returncode == 0, f"alembic upgrade head 실패:\n{upgrade_result.stderr}"
 
     return test_engine
+
+
+@pytest.fixture
+async def db_session(migrated_engine):
+    """함수 스코프 async 세션. 미커밋 변경이 있으면 테스트 후 롤백한다.
+
+    budget.py 함수들은 각 연산 후 session.commit()을 호출한다.
+    커밋된 세션에서 rollback()을 재시도하면 NullPool + 닫힌 이벤트루프 조합에서
+    "Event loop is closed" RuntimeError 가 발생하므로, 활성 트랜잭션이 있을 때만
+    롤백한다.
+    """
+    async with AsyncSession(migrated_engine, expire_on_commit=False) as session:
+        yield session
+        if session.in_transaction():
+            await session.rollback()
