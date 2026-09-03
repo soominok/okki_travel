@@ -51,8 +51,10 @@ async def reserve_verify(
         {"src": source, "n": n},
     )
     updated = result.fetchone()
-    await session.commit()  # 행이 없어도 커밋 — 빈 트랜잭션이 닫혀야 세션이 깨끗해진다
-    return updated is not None
+    if updated:
+        await session.commit()
+        return True
+    return False
 
 
 async def reserve_sample(
@@ -61,10 +63,10 @@ async def reserve_sample(
     n: int = 1,
     days_left: int | None = None,
 ) -> bool:
-    """SAMPLE 크레딧 n개 선점. 일일 페이싱 사용량 추적 포함.
+    """SAMPLE 크레딧 n개 선점. 자기보정 일일 페이싱 포함.
 
-    True = 성공, False = 예산 부족(건너뜀).
-    days_left: 남은 일수 (기본값: 오늘 포함 이번 달 잔여일). 사용량 추적에만 사용.
+    True = 성공, False = 예산 부족 또는 오늘 할당량 초과(건너뜀).
+    days_left: 남은 일수 (기본값: 오늘 포함 이번 달 잔여일).
     """
     if days_left is None:
         import calendar
@@ -88,11 +90,20 @@ async def reserve_sample(
               AND period_start = date_trunc('month', current_date)::date
               AND used_verify + used_sample + :n <= total
               AND used_sample + :n              <= sample_cap
+              AND (CASE WHEN sample_day = current_date
+                        THEN used_sample_day ELSE 0 END) + :n
+                  <= CEIL(
+                       (sample_cap - (used_sample - CASE WHEN sample_day = current_date
+                                                         THEN used_sample_day ELSE 0 END)) * 1.0
+                       / GREATEST(:days_left, 1)
+                     )
             RETURNING used_sample
             """
         ),
-        {"src": source, "n": n},
+        {"src": source, "n": n, "days_left": days_left},
     )
     updated = result.fetchone()
-    await session.commit()  # 행이 없어도 커밋 — 빈 트랜잭션이 닫혀야 세션이 깨끗해진다
-    return updated is not None
+    if updated:
+        await session.commit()
+        return True
+    return False

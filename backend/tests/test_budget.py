@@ -26,13 +26,13 @@ async def test_reserve_verify_decrements_budget(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_reserve_sample_respects_cap(db_session: AsyncSession):
-    # total=10, sample_cap=7 (ratio 0.70)
+    """sample_cap을 월 내에 다 써도 cap을 초과하지 않는다."""
+    # total=10, sample_cap=7 (ratio 0.70), days_left=1 → 하루 허용 7개
     await ensure_budget_row(
         db_session, source="brightdata_test_c", total=10, sample_cap_ratio=0.70
     )
-    # sample_cap = 7, 8번 시도 → 7번만 성공
     results = [
-        await reserve_sample(db_session, source="brightdata_test_c", days_left=30)
+        await reserve_sample(db_session, source="brightdata_test_c", days_left=1)
         for _ in range(8)
     ]
     assert results.count(True) == 7
@@ -49,3 +49,33 @@ async def test_ensure_idempotent(db_session: AsyncSession):
         if await reserve_verify(db_session, source="brightdata_test_d"):
             ok_count += 1
     assert ok_count == 5
+
+
+@pytest.mark.asyncio
+async def test_reserve_sample_pacing_limits_daily(db_session: AsyncSession):
+    """같은 날 두 번째 호출은 일일 허용량 초과 시 False."""
+    # sample_cap=7, days_left=7 → 하루 허용 = ceil(7/7) = 1
+    await ensure_budget_row(
+        db_session, source="brightdata_test_e", total=20, sample_cap_ratio=0.35
+    )
+    first = await reserve_sample(db_session, source="brightdata_test_e", days_left=7)
+    second = await reserve_sample(db_session, source="brightdata_test_e", days_left=7)
+    assert first is True
+    assert second is False
+
+
+@pytest.mark.asyncio
+async def test_missing_budget_row_returns_false(db_session: AsyncSession):
+    """예산 행이 없으면 False — 예외 아님."""
+    ok = await reserve_verify(db_session, source="brightdata_nonexistent")
+    assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_verify_consumes_total_blocking_sample(db_session: AsyncSession):
+    """verify로 total을 모두 쓰면 sample도 막힌다 (total 제약)."""
+    await ensure_budget_row(db_session, source="brightdata_test_f", total=2, sample_cap_ratio=0.90)
+    await reserve_verify(db_session, source="brightdata_test_f")
+    await reserve_verify(db_session, source="brightdata_test_f")
+    ok = await reserve_sample(db_session, source="brightdata_test_f", days_left=1)
+    assert ok is False

@@ -15,6 +15,7 @@ import os
 from urllib.parse import urlsplit
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -143,14 +144,14 @@ async def migrated_engine(test_engine):
     return test_engine
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="function")
 async def db_session(migrated_engine):
-    """함수 스코프 async 세션. 미커밋 변경이 있으면 테스트 후 롤백한다.
+    """함수 스코프 async 세션. 테스트 후 롤백한다.
 
-    budget.py 함수들은 각 연산 후 session.commit()을 호출한다.
-    커밋된 세션에서 rollback()을 재시도하면 NullPool + 닫힌 이벤트루프 조합에서
-    "Event loop is closed" RuntimeError 가 발생하므로, 활성 트랜잭션이 있을 때만
-    롤백한다.
+    loop_scope="function": 세션이 테스트 함수와 동일한 이벤트루프에서 실행된다.
+    asyncio_default_fixture_loop_scope=session 환경에서 루프 불일치를 방지한다.
+    in_transaction() 가드: budget 함수가 성공 시에만 commit하므로, 실패 경로에서는
+    미커밋 트랜잭션이 남아 있을 수 있다 — 그 경우만 rollback한다.
     """
     async with AsyncSession(migrated_engine, expire_on_commit=False) as session:
         yield session
