@@ -30,6 +30,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]  # FastAPI Depends() in function defaults — false positive
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

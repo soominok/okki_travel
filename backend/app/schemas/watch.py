@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ---------- params ----------
 
@@ -115,6 +115,8 @@ class WatchCreate(BaseModel):
 
 
 class WatchRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     kind: str
     title: str
@@ -125,3 +127,37 @@ class WatchRead(BaseModel):
     last_run_at: datetime | None
     next_run_at: datetime | None
     created_at: datetime
+
+
+class WatchPatch(BaseModel):
+    params: WatchParams | None = None
+    rules: list[Rule] | None = None
+    interval_min: int | None = Field(default=None, ge=30, le=1440)
+    status: Literal["active", "paused"] | None = None
+
+
+class RunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    watch_id: uuid.UUID
+    started_at: datetime
+    finished_at: datetime | None = None
+    status: str | None = None
+    offers_found: int | None = None
+    best_price_krw: int | None = None
+    credits_used: int | None = None
+    error: str | None = None
+
+
+class SnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    watch_id: uuid.UUID
+    captured_at: datetime
+    min_price_krw: int
+    median_price_krw: int | None = None
+    offer_count: int | None = None
+    coverage_pct: float | None = None
+    credits_used: int | None = None
