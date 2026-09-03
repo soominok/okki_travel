@@ -104,39 +104,109 @@ async def test_http_error_returns_ok_false():
     assert result.offers == []
 
 
+# Mod 7: 실제로 dedup이 작동하는지 검증하는 테스트로 재작성
 @pytest.mark.asyncio
-async def test_dedup_same_external_id():
-    """grouped와 prices_for_dates가 같은 항공편을 반환해도 중복 제거된다."""
-    # grouped에는 Oct7 항목이 있다; prices에도 같은 external_id가 나오면 1개만.
-    dup_prices = {
-        "data": [
-            {
-                "airline": "7C",
-                "departure_at": "2026-10-07T09:30:00",
-                "return_at": "2026-10-09T18:00:00",
-                "price": 185000,
-                "destination": "FUK",
+async def test_dedup_within_grouped_endpoint():
+    """grouped 응답에 서로 다른 dict 키지만 같은 ext_id를 생성하는 항목이 두 개여도 1개만 반환된다.
+
+    두 항목이 departure_at/return_at/airline/flight_number가 동일하면 ext_id가 같으므로
+    offers_by_id에 1개만 들어간다.
+    """
+    dup_grouped = {
+        "data": {
+            "2026-10-04": {
+                "departure_at": "2026-10-04T07:05:00",
+                "return_at": "2026-10-06T18:30:00",
+                "airline": "LJ",
+                "flight_number": "271",
+                "price": 220000,
                 "origin": "ICN",
-                "transfers": 0,
-                "gate": "Jetradar",
-                "link": "/dup",
-                "flight_number": "201",
-                "duration": 90,
-                "duration_to": 90,
-                "duration_back": 85,
-                "return_transfers": 0,
-            }
-        ],
+                "destination": "FUK",
+            },
+            # 다른 dict 키지만 departure_at이 같아서 ext_id 동일
+            "2026-10-05": {
+                "departure_at": "2026-10-04T07:05:00",
+                "return_at": "2026-10-06T18:30:00",
+                "airline": "LJ",
+                "flight_number": "271",
+                "price": 218000,
+                "origin": "ICN",
+                "destination": "FUK",
+            },
+        },
         "currency": "KRW",
     }
+    with respx.mock:
+        respx.get("https://api.travelpayouts.com/aviasales/v3/grouped_prices").mock(
+            return_value=httpx.Response(200, json=dup_grouped)
+        )
+        respx.get("https://api.travelpayouts.com/aviasales/v3/prices_for_dates").mock(
+            return_value=httpx.Response(200, json={"data": [], "currency": "KRW"})
+        )
+        result = await _adapter().fetch(_req())
+
+    # grouped에 항목 2개지만 ext_id가 같으므로 1개만
+    assert result.ok is True
+    assert len(result.offers) == 1
+    ext_ids = [o.external_id for o in result.offers]
+    assert len(ext_ids) == len(set(ext_ids)), "external_id 중복이 있다"
+
+
+# Mod 8: 누락 edge-case 테스트 4개 추가
+
+@pytest.mark.asyncio
+async def test_empty_grouped_response():
+    """grouped가 빈 결과를 줘도 ok=True, offers=[]."""
+    with respx.mock:
+        respx.get("https://api.travelpayouts.com/aviasales/v3/grouped_prices").mock(
+            return_value=httpx.Response(200, json={"data": {}, "currency": "KRW"})
+        )
+        respx.get("https://api.travelpayouts.com/aviasales/v3/prices_for_dates").mock(
+            return_value=httpx.Response(200, json={"data": [], "currency": "KRW"})
+        )
+        result = await _adapter().fetch(_req())
+
+    assert result.ok is True
+    assert result.offers == []
+
+
+@pytest.mark.asyncio
+async def test_cross_month_range_rejected():
+    """depart_from과 depart_to가 다른 달이면 ok=False, 에러에 'same calendar month' 포함."""
+    result = await _adapter().fetch(
+        _req(depart_from=date(2026, 10, 20), depart_to=date(2026, 11, 19))
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "same calendar month" in result.error
+
+
+@pytest.mark.asyncio
+async def test_non_krw_currency_rejected():
+    """응답 통화가 KRW가 아니면 ok=False, 에러에 'non-KRW' 포함."""
+    with respx.mock:
+        respx.get("https://api.travelpayouts.com/aviasales/v3/grouped_prices").mock(
+            return_value=httpx.Response(200, json={"data": {}, "currency": "usd"})
+        )
+        result = await _adapter().fetch(_req())
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "non-KRW" in result.error
+
+
+@pytest.mark.asyncio
+async def test_prices_for_dates_error_does_not_kill_grouped():
+    """prices_for_dates가 500 오류여도 grouped 결과를 반환한다."""
     with respx.mock:
         respx.get("https://api.travelpayouts.com/aviasales/v3/grouped_prices").mock(
             return_value=httpx.Response(200, json=_load("grouped_prices.json"))
         )
         respx.get("https://api.travelpayouts.com/aviasales/v3/prices_for_dates").mock(
-            return_value=httpx.Response(200, json=dup_prices)
+            return_value=httpx.Response(500)
         )
         result = await _adapter().fetch(_req())
 
-    ext_ids = [o.external_id for o in result.offers]
-    assert len(ext_ids) == len(set(ext_ids)), "external_id 중복이 있다"
+    assert result.ok is True
+    assert len(result.offers) > 0
