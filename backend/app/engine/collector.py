@@ -177,7 +177,6 @@ async def collect_watch(
                 continue
             if result.ok:
                 all_offers.extend(result.offers)
-                credits_used += result.credits_used
                 if adapter.name not in sources_ok:
                     sources_ok.append(adapter.name)
             else:
@@ -217,12 +216,19 @@ async def collect_watch(
                 except Exception as e:  # noqa: BLE001
                     sources_failed[adapter.name] = str(e)
                     continue
-                if result.ok and result.offers:
-                    credits_used += result.credits_used
-                    if adapter.name not in sources_ok:
-                        sources_ok.append(adapter.name)
+                if result.ok and result.offers and adapter.name not in sources_ok:
+                    sources_ok.append(adapter.name)
 
-    # 6. Offers DB 저장
+    # 6. Offers DB 저장 — (source, external_id) 중복 제거 후 삽입
+    seen_keys: set[tuple[str, str]] = set()
+    unique_offers = []
+    for o in all_offers:
+        key = (o.source, o.external_id)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            unique_offers.append(o)
+    all_offers = unique_offers
+
     for o in all_offers:
         db_offer = DbOffer(
             watch_id=watch_id,
