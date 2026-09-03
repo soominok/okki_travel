@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid as _uuid
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -95,3 +97,47 @@ async def test_delete_watch(client):
 async def test_unauthenticated_returns_403(client):
     r = await client.get("/api/watches")
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_run_returns_202(client):
+    create = await client.post("/api/watches", json=_FLIGHT_BODY, headers=_auth())
+    wid = create.json()["id"]
+    r = await client.post(f"/api/watches/{wid}/run", headers=_auth())
+    assert r.status_code == 202
+    body = r.json()
+    assert body["queued"] is True
+    assert body["watch_id"] == wid
+
+
+@pytest.mark.asyncio
+async def test_run_paused_watch_returns_409(client):
+    create = await client.post("/api/watches", json=_FLIGHT_BODY, headers=_auth())
+    wid = create.json()["id"]
+    await client.patch(f"/api/watches/{wid}", json={"status": "paused"}, headers=_auth())
+    r = await client.post(f"/api/watches/{wid}/run", headers=_auth())
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_run_missing_watch_returns_404(client):
+    r = await client.post(f"/api/watches/{_uuid.uuid4()}/run", headers=_auth())
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_snapshots_empty(client):
+    create = await client.post("/api/watches", json=_FLIGHT_BODY, headers=_auth())
+    wid = create.json()["id"]
+    r = await client.get(f"/api/watches/{wid}/snapshots", headers=_auth())
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_get_runs_empty(client):
+    create = await client.post("/api/watches", json=_FLIGHT_BODY, headers=_auth())
+    wid = create.json()["id"]
+    r = await client.get(f"/api/watches/{wid}/runs", headers=_auth())
+    assert r.status_code == 200
+    assert r.json() == []

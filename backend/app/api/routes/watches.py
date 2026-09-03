@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_token
-from app.models.watch import Watch
-from app.schemas.watch import WatchCreate, WatchPatch, WatchRead
+from app.config import get_settings
+from app.db import SessionLocal
+from app.engine.collector import collect_watch
+from app.models.price import PriceSnapshot
+from app.models.watch import Watch, WatchRun
+from app.schemas.watch import RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
+from app.sources.registry import build_registry
 
 router = APIRouter(prefix="/api/watches", tags=["watches"])
 _auth = Depends(require_token)
@@ -73,3 +78,56 @@ async def delete_watch(watch_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="watch not found")
     await db.delete(watch)
     await db.commit()
+
+
+@router.post("/{watch_id}/run", status_code=status.HTTP_202_ACCEPTED, dependencies=[_auth])
+async def run_watch(
+    watch_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    watch = await db.get(Watch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+    if watch.status == "paused":
+        raise HTTPException(status_code=409, detail="watch is paused")
+
+    settings = get_settings()
+    registry = build_registry(settings)
+
+    async def _bg() -> None:
+        async with SessionLocal() as s:
+            await collect_watch(watch_id, session=s, registry=registry, settings=settings)
+
+    background_tasks.add_task(_bg)
+    return {"queued": True, "watch_id": str(watch_id)}
+
+
+@router.get("/{watch_id}/snapshots", response_model=list[SnapshotOut], dependencies=[_auth])
+async def get_snapshots(
+    watch_id: uuid.UUID,
+    limit: int = 90,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PriceSnapshot)
+        .where(PriceSnapshot.watch_id == watch_id)
+        .order_by(desc(PriceSnapshot.captured_at))
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.get("/{watch_id}/runs", response_model=list[RunOut], dependencies=[_auth])
+async def get_runs(
+    watch_id: uuid.UUID,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(WatchRun)
+        .where(WatchRun.watch_id == watch_id)
+        .order_by(desc(WatchRun.started_at))
+        .limit(limit)
+    )
+    return result.scalars().all()
