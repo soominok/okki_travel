@@ -180,7 +180,10 @@ WHERE source = :src
   AND used_sample + :n <= sample_cap
   AND used_verify + used_sample + :n <= total
   AND (CASE WHEN sample_day = current_date THEN used_sample_day ELSE 0 END) + :n
-      <= (sample_cap - used_sample) / GREATEST(:days_left_in_month, 1)
+      <= CEIL(
+           (sample_cap - used_sample_day_start) * 1.0
+           / GREATEST(:days_left_in_month, 1)
+         )
 RETURNING used_sample;
 ```
 
