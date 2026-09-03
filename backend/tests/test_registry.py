@@ -80,9 +80,31 @@ class TestBuildRegistry:
 
 class TestCrawlPolicy:
     def test_require_enabled_raises_when_disabled(self, monkeypatch):
-        monkeypatch.setenv("CRAWL_ENABLED", "false")
+        from app.config import Settings
+
+        monkeypatch.setattr(
+            "app.sources.policy.get_settings",
+            lambda: Settings(
+                app_api_token="x" * 32,
+                database_url="postgresql+asyncpg://trip:trip@localhost:5434/trippick_test",
+                crawl_enabled=False,
+            ),
+        )
         with pytest.raises(RuntimeError, match="CRAWL_ENABLED"):
             CrawlPolicy.require_enabled()
+
+    def test_require_enabled_passes_when_enabled(self, monkeypatch):
+        from app.config import Settings
+
+        monkeypatch.setattr(
+            "app.sources.policy.get_settings",
+            lambda: Settings(
+                app_api_token="x" * 32,
+                database_url="postgresql+asyncpg://trip:trip@localhost:5434/trippick_test",
+                crawl_enabled=True,
+            ),
+        )
+        CrawlPolicy.require_enabled()  # should not raise
 
     def test_check_allowed_returns_false(self):
         assert CrawlPolicy.check_allowed("example.com") is False

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+from app.config import get_settings
 
 
 class CrawlPolicy:
@@ -12,8 +12,8 @@ class CrawlPolicy:
 
     @staticmethod
     def require_enabled() -> None:
-        """CRAWL_ENABLED=false 면 RuntimeError. 크롤 어댑터 시작 시 호출."""
-        if os.environ.get("CRAWL_ENABLED", "false").lower() != "true":
+        """crawl_enabled=False 면 RuntimeError. 크롤 어댑터 시작 시 호출."""
+        if not get_settings().crawl_enabled:
             raise RuntimeError(
                 "CRAWL_ENABLED is false — crawl adapters are disabled. "
                 "Set CRAWL_ENABLED=true in .env to enable."
