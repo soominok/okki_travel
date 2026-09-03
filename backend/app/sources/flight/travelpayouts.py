@@ -229,8 +229,10 @@ class TravelpayoutsAdapter:
 
             prices_body = prices_resp.json()
             prices_currency = prices_body.get("currency", "krw").upper()
+            if prices_currency != "KRW":
+                pass  # 비-KRW prices_for_dates: 이 엔드포인트 결과만 건너뜀
 
-            for item in prices_body.get("data") or []:
+            for item in (prices_body.get("data") or [] if prices_currency == "KRW" else []):
                 if not isinstance(item, dict):
                     continue
                 dep = _parse_dt(item.get("departure_at"))
