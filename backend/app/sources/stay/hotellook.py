@@ -52,6 +52,10 @@ class HotellookAdapter:
             )
             resp.raise_for_status()
 
+            currency = req.currency.upper()
+            if currency != "KRW":
+                return SourceResult(ok=False, data=[], error=f"HotellookAdapter only supports KRW; got {currency}")
+
             data = resp.json()
             if not isinstance(data, list):
                 return SourceResult(ok=False, error=f"unexpected response shape: {type(data)}")
@@ -71,7 +75,7 @@ class HotellookAdapter:
                         kind="stay",
                         price_krw=int(price),
                         price_original=float(price),
-                        currency_original=req.currency,
+                        currency_original=currency,
                         depart_date=check_in,
                         return_date=check_out,
                         carrier=None,
