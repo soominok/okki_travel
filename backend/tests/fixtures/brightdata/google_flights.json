@@ -1,0 +1,45 @@
+{
+  "best_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {"id": "ICN", "name": "Incheon International"},
+          "arrival_airport": {"id": "FUK", "name": "Fukuoka"},
+          "departure_time": "2026-10-07 09:30",
+          "arrival_time": "2026-10-07 11:00",
+          "airline": "Jeju Air",
+          "airline_logo": "https://example.com/logo.png",
+          "travel_class": "Economy",
+          "flight_number": "7C 1201",
+          "legroom": "30 in",
+          "extensions": ["Below average legroom"]
+        }
+      ],
+      "return_flights": [
+        {
+          "departure_airport": {"id": "FUK", "name": "Fukuoka"},
+          "arrival_airport": {"id": "ICN", "name": "Incheon International"},
+          "departure_time": "2026-10-09 18:00",
+          "arrival_time": "2026-10-09 19:30",
+          "airline": "Jeju Air",
+          "airline_logo": "https://example.com/logo.png",
+          "travel_class": "Economy",
+          "flight_number": "7C 1202",
+          "legroom": "30 in"
+        }
+      ],
+      "price": 215000,
+      "type": "Round trip",
+      "airline_logo": "https://example.com/logo.png",
+      "booking_token": "abc123",
+      "total_duration": 90,
+      "carbon_emissions": {"this_flight": 120000}
+    }
+  ],
+  "other_flights": [],
+  "price_insights": {
+    "lowest_price": 215000,
+    "price_level": "typical",
+    "typical_price_range": [180000, 280000]
+  }
+}
