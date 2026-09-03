@@ -23,7 +23,7 @@ def _parse_date_str(v: str | None) -> date | None:
         return None
 
 
-def _flight_group_to_offer(group: dict) -> Offer | None:
+def _flight_group_to_offer(group: dict, currency: str = "KRW") -> Offer | None:
     price = group.get("price")
     if price is None:
         return None
@@ -50,7 +50,7 @@ def _flight_group_to_offer(group: dict) -> Offer | None:
         kind="flight",
         price_krw=int(price),
         price_original=float(price),
-        currency_original="KRW",
+        currency_original=currency,
         depart_date=dep_date,
         return_date=ret_date,
         carrier=airline or None,
@@ -125,6 +125,10 @@ class BrightDataAdapter:
             resp.raise_for_status()
 
             body = resp.json()
+            currency = req.currency.upper()
+            if currency != "KRW":
+                return SourceResult(ok=False, data=[], error=f"BrightDataAdapter only supports KRW; got {currency}")
+
             best = body.get("best_flights") or []
             other = body.get("other_flights") or []
             all_groups = best + other
@@ -133,7 +137,7 @@ class BrightDataAdapter:
             seen: set[str] = set()
             for group in all_groups:
                 try:
-                    o = _flight_group_to_offer(group)
+                    o = _flight_group_to_offer(group, currency)
                     if o is not None and o.external_id not in seen:
                         offers.append(o)
                         seen.add(o.external_id)
