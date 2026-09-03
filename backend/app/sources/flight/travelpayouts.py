@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 from app.sources.base import FetchRequest, Offer, SourceCapability, SourceResult
@@ -55,7 +55,9 @@ def _grouped_to_offer(key: str, item: dict, currency: str) -> Offer | None:
     dep_s = dep.isoformat() if dep else key
     # Mod 6: ext_id includes return_date when available
     ret_s = f"_{ret.isoformat()}" if ret else ""
-    ext_id = f"tp_g_{item.get('origin', '')}{item.get('destination', '')}_{dep_s}{ret_s}_{airline}{fn}"
+    orig = item.get("origin", "")
+    dest = item.get("destination", "")
+    ext_id = f"tp_g_{orig}{dest}_{dep_s}{ret_s}_{airline}{fn}"
     return Offer(
         source="travelpayouts",
         external_id=ext_id,
@@ -68,7 +70,7 @@ def _grouped_to_offer(key: str, item: dict, currency: str) -> Offer | None:
         carrier=airline or None,
         deep_link=item.get("link"),
         raw=item,
-        collected_at=datetime.now(tz=timezone.utc),
+        collected_at=datetime.now(tz=UTC),
         freshness="cached",
         cache_age_days=None,
         observed_at=None,
@@ -85,7 +87,9 @@ def _prices_to_offer(item: dict, currency: str) -> Offer | None:
     fn = item.get("flight_number", "")
     dep_s = dep.isoformat() if dep else ""
     ret_s = ret.isoformat() if ret else ""
-    ext_id = f"tp_p_{item.get('origin', '')}{item.get('destination', '')}_{dep_s}_{ret_s}_{airline}{fn}"
+    orig = item.get("origin", "")
+    dest = item.get("destination", "")
+    ext_id = f"tp_p_{orig}{dest}_{dep_s}_{ret_s}_{airline}{fn}"
     return Offer(
         source="travelpayouts",
         external_id=ext_id,
@@ -98,7 +102,7 @@ def _prices_to_offer(item: dict, currency: str) -> Offer | None:
         carrier=airline or None,
         deep_link=item.get("link"),
         raw=item,
-        collected_at=datetime.now(tz=timezone.utc),
+        collected_at=datetime.now(tz=UTC),
         freshness="cached",
         cache_age_days=None,
         observed_at=None,
@@ -232,7 +236,7 @@ class TravelpayoutsAdapter:
             if prices_currency != "KRW":
                 pass  # 비-KRW prices_for_dates: 이 엔드포인트 결과만 건너뜀
 
-            for item in (prices_body.get("data") or [] if prices_currency == "KRW" else []):
+            for item in prices_body.get("data") or [] if prices_currency == "KRW" else []:
                 if not isinstance(item, dict):
                     continue
                 dep = _parse_dt(item.get("departure_at"))

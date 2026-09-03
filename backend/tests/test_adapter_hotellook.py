@@ -1,4 +1,5 @@
 """HotellookAdapter 테스트 — respx로 HTTP 목킹."""
+
 from __future__ import annotations
 
 import json
@@ -10,8 +11,8 @@ import pytest
 import respx
 
 from app.sources.base import FetchRequest
-from app.sources.stay.hotellook import HotellookAdapter, HL_CACHE_URL
 from app.sources.http import RateLimitedClient
+from app.sources.stay.hotellook import HL_CACHE_URL, HotellookAdapter
 
 FIXTURES = Path(__file__).parent / "fixtures" / "hotellook"
 
@@ -40,9 +41,7 @@ def _req(**kw) -> FetchRequest:
 @pytest.mark.asyncio
 async def test_fetch_returns_ok_and_offers():
     with respx.mock:
-        respx.get(HL_CACHE_URL).mock(
-            return_value=httpx.Response(200, json=_load("cache.json"))
-        )
+        respx.get(HL_CACHE_URL).mock(return_value=httpx.Response(200, json=_load("cache.json")))
         result = await _adapter().fetch(_req())
 
     assert result.ok is True
@@ -52,9 +51,7 @@ async def test_fetch_returns_ok_and_offers():
 @pytest.mark.asyncio
 async def test_prices_are_krw_int():
     with respx.mock:
-        respx.get(HL_CACHE_URL).mock(
-            return_value=httpx.Response(200, json=_load("cache.json"))
-        )
+        respx.get(HL_CACHE_URL).mock(return_value=httpx.Response(200, json=_load("cache.json")))
         result = await _adapter().fetch(_req())
 
     assert all(isinstance(o.price_krw, int) for o in result.offers)
@@ -64,9 +61,7 @@ async def test_prices_are_krw_int():
 @pytest.mark.asyncio
 async def test_offer_kind_is_stay():
     with respx.mock:
-        respx.get(HL_CACHE_URL).mock(
-            return_value=httpx.Response(200, json=_load("cache.json"))
-        )
+        respx.get(HL_CACHE_URL).mock(return_value=httpx.Response(200, json=_load("cache.json")))
         result = await _adapter().fetch(_req())
 
     assert all(o.kind == "stay" for o in result.offers)

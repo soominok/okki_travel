@@ -1,4 +1,5 @@
 """call_budgets 예산 선점 로직 테스트 — 실제 Postgres 사용."""
+
 from __future__ import annotations
 
 import pytest
@@ -28,12 +29,9 @@ async def test_reserve_verify_decrements_budget(db_session: AsyncSession):
 async def test_reserve_sample_respects_cap(db_session: AsyncSession):
     """sample_cap을 월 내에 다 써도 cap을 초과하지 않는다."""
     # total=10, sample_cap=7 (ratio 0.70), days_left=1 → 하루 허용 7개
-    await ensure_budget_row(
-        db_session, source="brightdata_test_c", total=10, sample_cap_ratio=0.70
-    )
+    await ensure_budget_row(db_session, source="brightdata_test_c", total=10, sample_cap_ratio=0.70)
     results = [
-        await reserve_sample(db_session, source="brightdata_test_c", days_left=1)
-        for _ in range(8)
+        await reserve_sample(db_session, source="brightdata_test_c", days_left=1) for _ in range(8)
     ]
     assert results.count(True) == 7
     assert results.count(False) == 1
@@ -55,9 +53,7 @@ async def test_ensure_idempotent(db_session: AsyncSession):
 async def test_reserve_sample_pacing_limits_daily(db_session: AsyncSession):
     """같은 날 두 번째 호출은 일일 허용량 초과 시 False."""
     # sample_cap=7, days_left=7 → 하루 허용 = ceil(7/7) = 1
-    await ensure_budget_row(
-        db_session, source="brightdata_test_e", total=20, sample_cap_ratio=0.35
-    )
+    await ensure_budget_row(db_session, source="brightdata_test_e", total=20, sample_cap_ratio=0.35)
     first = await reserve_sample(db_session, source="brightdata_test_e", days_left=7)
     second = await reserve_sample(db_session, source="brightdata_test_e", days_left=7)
     assert first is True

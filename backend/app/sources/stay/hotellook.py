@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from app.sources.base import FetchRequest, Offer, SourceCapability, SourceResult
@@ -33,7 +33,10 @@ class HotellookAdapter:
 
     async def fetch(self, req: FetchRequest) -> SourceResult:
         check_in = req.depart_from
-        nights = req.nights_min if req.nights_min is not None else (req.depart_to - req.depart_from).days
+        if req.nights_min is not None:
+            nights = req.nights_min
+        else:
+            nights = (req.depart_to - req.depart_from).days
         check_out = check_in + timedelta(days=max(nights, 1))
 
         try:
@@ -54,14 +57,16 @@ class HotellookAdapter:
 
             currency = req.currency.upper()
             if currency != "KRW":
-                return SourceResult(ok=False, data=[], error=f"HotellookAdapter only supports KRW; got {currency}")
+                return SourceResult(
+                    ok=False, data=[], error=f"HotellookAdapter only supports KRW; got {currency}"
+                )
 
             data = resp.json()
             if not isinstance(data, list):
                 return SourceResult(ok=False, error=f"unexpected response shape: {type(data)}")
 
             offers: list[Offer] = []
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             for hotel in data:
                 price = hotel.get("priceFrom")
                 hotel_id = hotel.get("hotelId")

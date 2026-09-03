@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from app.sources.base import FetchRequest, Offer, SourceCapability, SourceResult
@@ -39,11 +39,9 @@ def _flight_group_to_offer(group: dict, currency: str = "KRW") -> Offer | None:
 
     dep_s = dep_date.isoformat() if dep_date else "unknown"
     ret_s = ret_date.isoformat() if ret_date else "unknown"
-    ext_id = (
-        f"bd_{dep_s}_{ret_s}_{airline.replace(' ', '')}_{flight_no.replace(' ', '')}"
-    )
+    ext_id = f"bd_{dep_s}_{ret_s}_{airline.replace(' ', '')}_{flight_no.replace(' ', '')}"
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     return Offer(
         source="brightdata",
         external_id=ext_id,
@@ -127,7 +125,9 @@ class BrightDataAdapter:
             body = resp.json()
             currency = req.currency.upper()
             if currency != "KRW":
-                return SourceResult(ok=False, data=[], error=f"BrightDataAdapter only supports KRW; got {currency}")
+                return SourceResult(
+                    ok=False, data=[], error=f"BrightDataAdapter only supports KRW; got {currency}"
+                )
 
             best = body.get("best_flights") or []
             other = body.get("other_flights") or []

@@ -1,4 +1,5 @@
 """BrightDataAdapter 테스트 — respx로 HTTP 목킹."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,7 @@ import pytest
 import respx
 
 from app.sources.base import FetchRequest
-from app.sources.flight.brightdata import BrightDataAdapter, BD_SERP_URL
+from app.sources.flight.brightdata import BD_SERP_URL, BrightDataAdapter
 from app.sources.http import RateLimitedClient
 
 FIXTURES = Path(__file__).parent / "fixtures" / "brightdata"

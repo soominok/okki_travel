@@ -1,4 +1,5 @@
 """TravelpayoutsAdapter 테스트 — respx로 HTTP 목킹."""
+
 from __future__ import annotations
 
 import json
@@ -153,6 +154,7 @@ async def test_dedup_within_grouped_endpoint():
 
 
 # Mod 8: 누락 edge-case 테스트 4개 추가
+
 
 @pytest.mark.asyncio
 async def test_empty_grouped_response():
