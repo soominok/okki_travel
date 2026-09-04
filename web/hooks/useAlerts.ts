@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/client';
 import type { AlertOut } from '@/lib/types';
 
@@ -20,5 +20,14 @@ export function useAlerts(filters: AlertFilters = {}) {
   return useQuery<AlertOut[]>({
     queryKey: ['alerts', filters],
     queryFn: () => apiFetch<AlertOut[]>(`/api/alerts${qs ? `?${qs}` : ''}`),
+  });
+}
+
+export function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: string) =>
+      apiFetch(`/api/alerts/${alertId}/read`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
   });
 }
