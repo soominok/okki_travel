@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from app.engine.rules import (
+    AlertCandidate,  # noqa: F401
     eval_all_time_low,
     eval_drop_pct,
     eval_new_best,

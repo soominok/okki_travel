@@ -18,9 +18,6 @@ class AlertCandidate:
     deep_link: str | None = None
 
 
-_SEVERITY_RANK = {"info": 0, "good": 1, "great": 2}
-
-
 def _fmt(price: int) -> str:
     return f"{price:,}원"
 
