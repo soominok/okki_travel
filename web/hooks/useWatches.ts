@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/client';
-import type { WatchOut, WatchCreate, PriceSnapshotOut } from '@/lib/types';
+import type { WatchOut, WatchCreate, PriceSnapshotOut, OfferOut, WorkerRunOut } from '@/lib/types';
 
 export function useWatches() {
   return useQuery<WatchOut[]>({
@@ -31,6 +31,7 @@ export function useRunNow(watchId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['watches', watchId] });
       qc.invalidateQueries({ queryKey: ['watches', watchId, 'snapshots'] });
+      qc.invalidateQueries({ queryKey: ['watches', watchId, 'runs'] });
     },
   });
 }
@@ -46,8 +47,6 @@ export function useWatchSparkline(watchId: string, enabled = true) {
     staleTime: 5 * 60_000,
   });
 }
-
-import type { OfferOut, WorkerRunOut } from '@/lib/types';
 
 export function useWatch(id: string) {
   return useQuery<WatchOut>({
