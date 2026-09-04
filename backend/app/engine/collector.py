@@ -294,8 +294,8 @@ async def collect_watch(
             candidates = evaluate_rules(snap, history, watch.rules)
             dispatcher = Dispatcher(settings=settings)
 
+            best_offer_obj = min(all_offers, key=lambda o: o.price_krw) if all_offers else None
             for candidate in candidates:
-                best_offer_obj = min(all_offers, key=lambda o: o.price_krw) if all_offers else None
                 depart_dt = best_offer_obj.depart_date if best_offer_obj else None
                 key = make_dedup_key(
                     watch_id, candidate.rule_id, candidate.best_price_krw, depart_dt
@@ -328,7 +328,7 @@ async def collect_watch(
                 age_label = (
                     "최대 7일 전 캐시"
                     if freshness == "cached"
-                    else f"{best_offer_obj.cache_age_days or 0}분 전 실측"
+                    else "실가격 확인"
                     if best_offer_obj
                     else "알 수 없음"
                 )
@@ -361,13 +361,21 @@ async def collect_watch(
                     else None,
                     dedup_key=key,
                 )
-                await dispatcher.dispatch(msg, alert_id=alert.id, session=session)
-                log.info(
-                    "collector.alert_dispatched",
-                    rule_id=candidate.rule_id,
-                    severity=candidate.severity,
-                    watch_id=str(watch_id),
-                )
+                try:
+                    await dispatcher.dispatch(msg, alert_id=alert.id, session=session)
+                except Exception:  # noqa: BLE001
+                    log.warning(
+                        "collector.dispatch_failed",
+                        rule_id=candidate.rule_id,
+                        watch_id=str(watch_id),
+                    )
+                else:
+                    log.info(
+                        "collector.alert_dispatched",
+                        rule_id=candidate.rule_id,
+                        severity=candidate.severity,
+                        watch_id=str(watch_id),
+                    )
 
         # 8. WatchRun 완료
         run.finished_at = datetime.now(tz=UTC)

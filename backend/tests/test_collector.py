@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
@@ -180,3 +180,132 @@ async def test_collect_watch_paused_returns_failed(db_session):
         settings=get_settings(),
     )
     assert run.status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_collect_watch_creates_alert_when_rule_fires(db_session, migrated_engine):
+    """규칙 평가 → dedup pass → Alert DB 저장 검증."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import select
+
+    from app.engine.collector import collect_watch
+    from app.models.alert import Alert
+    from app.models.watch import Watch as WatchModel
+    from app.sources.base import Offer, SourceResult
+
+    # threshold 250000원 규칙이 있는 Watch 생성
+    watch = WatchModel(
+        kind="flight",
+        title="alert-test",
+        status="active",
+        params={
+            "kind": "flight",
+            "origin": "ICN",
+            "destination": "FUK",
+            "depart_from": "2026-10-01",
+            "depart_to": "2026-10-31",
+        },
+        rules=[{"id": "r1", "type": "threshold", "price_krw": 250000}],
+        next_run_at=datetime.now(tz=UTC),
+    )
+    db_session.add(watch)
+    await db_session.commit()
+
+    # 230,000원 오퍼를 반환하는 mock registry (threshold 250,000 미만 → 규칙 발화)
+    mock_offer = Offer(
+        source="travelpayouts",
+        external_id="test-001",
+        kind="flight",
+        price_krw=230000,
+        price_original=230000,
+        currency_original="KRW",
+        depart_date=date(2026, 10, 15),
+        freshness="cached",
+        cache_age_days=1,
+        collected_at=datetime.now(tz=UTC),
+        raw={},
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.name = "travelpayouts"
+    mock_adapter.capability.cost_per_call = 0
+    mock_adapter.capability.roles = ["scan"]
+    mock_adapter.fetch = AsyncMock(return_value=SourceResult(ok=True, offers=[mock_offer]))
+
+    mock_registry = MagicMock()
+    mock_registry.get.return_value = [mock_adapter]
+
+    settings = get_settings()
+
+    run = await collect_watch(
+        watch.id, session=db_session, registry=mock_registry, settings=settings
+    )
+
+    assert run.status in ("ok", "partial")
+    assert run.offers_found == 1
+
+    # Alert가 생성됐는지 확인
+    result = await db_session.execute(select(Alert).where(Alert.watch_id == watch.id))
+    alerts = result.scalars().all()
+    assert len(alerts) >= 1
+    assert alerts[0].rule_id == "r1"
+    assert alerts[0].severity == "great"
+
+
+@pytest.mark.asyncio
+async def test_collect_watch_no_alert_when_no_rules(db_session, migrated_engine):
+    """watch.rules가 빈 리스트면 Alert가 생성되지 않는다."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from sqlalchemy import select
+
+    from app.engine.collector import collect_watch
+    from app.models.alert import Alert
+    from app.models.watch import Watch as WatchModel
+    from app.sources.base import Offer, SourceResult
+
+    watch = WatchModel(
+        kind="flight",
+        title="no-rules",
+        status="active",
+        params={
+            "kind": "flight",
+            "origin": "ICN",
+            "destination": "FUK",
+            "depart_from": "2026-10-01",
+            "depart_to": "2026-10-31",
+        },
+        rules=[],  # 규칙 없음
+        next_run_at=datetime.now(tz=UTC),
+    )
+    db_session.add(watch)
+    await db_session.commit()
+
+    mock_offer = Offer(
+        source="travelpayouts",
+        external_id="test-002",
+        kind="flight",
+        price_krw=100000,
+        price_original=100000,
+        currency_original="KRW",
+        depart_date=date(2026, 10, 15),
+        freshness="cached",
+        cache_age_days=1,
+        collected_at=datetime.now(tz=UTC),
+        raw={},
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.name = "travelpayouts"
+    mock_adapter.capability.cost_per_call = 0
+    mock_adapter.capability.roles = ["scan"]
+    mock_adapter.fetch = AsyncMock(return_value=SourceResult(ok=True, offers=[mock_offer]))
+
+    mock_registry = MagicMock()
+    mock_registry.get.return_value = [mock_adapter]
+
+    await collect_watch(
+        watch.id, session=db_session, registry=mock_registry, settings=get_settings()
+    )
+
+    result = await db_session.execute(select(Alert).where(Alert.watch_id == watch.id))
+    assert len(result.scalars().all()) == 0
