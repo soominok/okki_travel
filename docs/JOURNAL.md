@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-09-04 · 계획 4(알림 스택) 완료 — 5태스크 SDD 실행
+
+### eval_all_time_low / eval_new_best 자기 비교 버그
+
+최종 브랜치 리뷰에서 발견. 원인: `get_history`를 `session.flush()` **이후**에 호출하면
+같은 트랜잭션 내에서 현재 스냅샷이 history에 포함된다.
+`eval_all_time_low`는 `min(history) == snap.min_price_krw` → 항상 발화 안 함.
+
+수정: `get_history` 호출을 snap flush **이전**으로 이동. 단위 테스트(mock history)는
+현재 snap을 넣지 않으므로 이 버그를 잡지 못했다—collector 통합 테스트가 필요했다.
+교훈: 순수 함수 테스트와 실제 파이프라인 경로의 경계에서 타이밍 버그가 숨는다.
+
+### AlertCandidate.depart_date 인터페이스 결정
+
+스펙은 평가기가 `depart_date`를 채우도록 설계했지만, 실제로는
+collector가 `best_offer_obj.depart_date`로 오버라이드한다.
+평가기가 offer 객체를 모르므로 `None`이 기본값이 되고, collector가 보완한다.
+이 패턴이 더 깔끔하므로 유지하되, 코드에 명시(주석)했다.
+
+### /api/notify/test URL 결정
+
+Task 5 brief가 `/api/alerts/test`라고 썼지만 설계 스펙 API 테이블은 `/api/notify/test`였다.
+**Ruling: 스펙이 권위.** brief의 Step 2 코드가 틀렸다.
+별도 `notify_router`를 만들어 분리했다.
+
+### QUIET_HOURS severity='great' 우회 테스트 교훈
+
+초기 구현에서 `assert status != "deferred"` → 네트워크 오류 시 "failed"가 반환되어
+테스트가 통과해버렸다. `respx.mock` 없이 실제 HTTP를 시도했기 때문.
+수정: `respx.mock` + `assert status == "sent"`로 강화.
+교훈: 네트워크 실패를 확실히 막지 않으면 hollow assertion이 생긴다.
+
+---
+
 ## 2026-09-04 · 계획 3(수집 엔진) 완료 — 최종 리뷰 4개 블로킹 수정
 
 ### /run 엔드포인트: WatchRun 사전 생성 vs. collect_watch 내부 생성

@@ -1,33 +1,34 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-04 (계획 4 계획서 작성 완료)
+> 마지막 갱신: 2026-09-04 (계획 4 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료 · 계획 4 계획서 작성됨
-코드       backend(112 테스트 통과) + web(Next 16) · docker compose 4서비스 기동
-브랜치     feat/plan2-source-layer (계획 2+3 구현 포함, PR 대기)
+단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료 · 계획 4(알림 스택) 완료
+코드       backend(148 테스트 통과) + web(Next 16) · docker compose 4서비스 기동
+브랜치     feat/plan2-source-layer (계획 2+3+4 구현 포함, PR 준비)
 블로커     없음
-다음 할 일 계획 4 실행 (규칙 엔진 + 알림 스택)
+다음 할 일 PR 생성 후 계획 5(프론트엔드) 착수
 ```
 
 ## 지금 당장 할 일
 
-### 계획 4 실행 — `engine/rules.py` 부터
+### 계획 5 — 프론트엔드 5화면
 
-계획서: `docs/superpowers/plans/2026-09-04-04-notify.md`
-설계 스펙: `docs/superpowers/specs/2026-09-04-plan4-notify-design.md`
+계획서: 미작성 (먼저 `superpowers:brainstorming`으로 설계)
+참고: `docs/04-SCREENS.md`
 
-5개 태스크:
-- **T1** `engine/rules.py` + `engine/baseline.py` (TDD, 14개 테스트)
-- **T2** `engine/dedup.py` + `notify/base.py` + `notify/inapp.py`
-- **T3** `notify/slack.py` + `notify/dispatcher.py`
-- **T4** `collector.py` 통합 + Watch 생성 즉시 수집 트리거
-- **T5** `api/routes/alerts.py` + Worker cleanup/health 잡
+**계획 4 완료 현황 (2026-09-04):**
+- T1: engine/rules.py (순수 함수 4종) + engine/baseline.py
+- T2: engine/dedup.py + notify/base.py + notify/inapp.py
+- T3: notify/slack.py (Block Kit) + notify/dispatcher.py (QUIET_HOURS)
+- T4: collector.py Step 10 통합 + Watch 생성 즉시 수집 트리거
+- T5: GET /api/alerts + POST /api/alerts/{id}/read + POST /api/notify/test + Worker cleanup/health 잡
+- 최종 리뷰 2개 블로킹 수정 완료 (eval_all_time_low 버그, respx 목킹)
 
 계획 3 완료. 브랜치 `feat/plan2-source-layer`에 계획 2+3 전체 구현이 담겨 있다.
 
@@ -64,14 +65,15 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 | 1 | **기반** | ✅ 완료 — `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
 | 2 | **소스 계층** | ✅ 완료 — 3개 어댑터 + 예산 + 레지스트리, 91 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-02-02-source-layer.md) |
 | 3 | **수집 엔진** | ✅ 완료 — Watch CRUD + 수집 파이프라인 + Worker 틱, 112 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-03-03-collector.md) |
-| 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | [계획서](docs/superpowers/plans/2026-09-04-04-notify.md) |
+| 4 | 알림·API·스케줄러 | ✅ 완료 — 규칙 엔진 + 슬랙 알림 + Alert API + Worker 잡, 148 테스트 통과 | ❌ | [계획서](docs/superpowers/plans/2026-09-04-04-notify.md) |
 | 5 | 프론트엔드 | 5화면 | ❌ | 미작성 |
 
 - [x] **계획 1 실행** — 완료 (2026-09-01, 커밋 `c246659`)
 - [x] **스파이크 실행** — 완료 (2026-09-02). 판정 🟠, 설계 유지
 - [x] **계획 2 실행** — 완료 (2026-09-03, 커밋 `187a7ba`). 91 테스트 통과
 - [x] **계획 3 실행** — 완료 (2026-09-04, 커밋 `bfee92d`). 112 테스트 통과
-- [ ] 계획 4~5 작성 및 실행
+- [x] **계획 4 실행** — 완료 (2026-09-04, 커밋 `fb03a26`). 148 테스트 통과
+- [ ] 계획 5 작성 및 실행
 - [ ] E2E 검증 (`PROMPTS.md` P9)
 - [ ] 리뷰·하드닝 (`PROMPTS.md` P10)
 
