@@ -41,9 +41,54 @@ def test_is_quiet_now_outside_range():
     assert _is_quiet_now(time(23, 0), time(8, 0), now_kst_time) is False
 
 
-def test_is_quiet_now_great_always_false():
-    # great는 quiet 계산을 하지 않음 (dispatcher 레벨에서 처리)
-    pass
+@pytest.mark.asyncio
+async def test_dispatcher_sends_great_even_in_quiet_hours(db_session, migrated_engine):
+    from app.models.alert import Alert
+    from app.models.watch import Watch
+    from app.notify.dispatcher import Dispatcher
+
+    watch = Watch(
+        kind="flight",
+        title="great-test",
+        params={
+            "kind": "flight",
+            "origin": "ICN",
+            "destination": "FUK",
+            "depart_from": "2026-10-01",
+            "depart_to": "2026-10-31",
+        },
+        rules=[],
+    )
+    db_session.add(watch)
+    await db_session.flush()
+
+    alert = Alert(
+        watch_id=watch.id,
+        rule_id="r1",
+        severity="great",
+        title="t",
+        body="b",
+        dedup_key="great-bypass-test",
+    )
+    db_session.add(alert)
+    await db_session.commit()
+
+    settings = MagicMock()
+    settings.notify_channel_list = ["slack"]
+    settings.slack_webhook_url = MagicMock()
+    settings.slack_webhook_url.get_secret_value.return_value = "https://hooks.slack.com/test"
+    settings.quiet_hours_start = time(23, 0)
+    settings.quiet_hours_end = time(8, 0)
+
+    with patch("app.notify.dispatcher._is_quiet_now", return_value=True):
+        dispatcher = Dispatcher(settings=settings)
+        results = await dispatcher.dispatch(
+            _msg(severity="great"), alert_id=alert.id, session=db_session
+        )
+
+    slack_result = next(r for r in results if r.channel == "slack")
+    # great는 quiet를 무시 → deferred가 아니어야 함 (sent 또는 failed)
+    assert slack_result.status != "deferred"
 
 
 # ---------- slack ----------
@@ -83,7 +128,7 @@ async def test_slack_notifier_returns_failed_on_error():
 async def test_dispatcher_skips_slack_when_no_webhook(db_session):
 
     settings = MagicMock()
-    settings.notify_channel_list = ["slack", "inapp"]
+    settings.notify_channel_list = ["slack"]
     settings.slack_webhook_url = None
     settings.quiet_hours_start = time(23, 0)
     settings.quiet_hours_end = time(8, 0)
