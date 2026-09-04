@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMarkRead } from '@/hooks/useAlerts';
 import { formatKST, formatRelative } from '@/lib/format';
@@ -39,9 +40,7 @@ export default function AlertList({ alerts, watchNames = {} }: AlertListProps) {
         return (
           <div
             key={alert.id}
-            className={`flex items-stretch cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 ${
-              isUnread ? 'font-semibold' : ''
-            }`}
+            className="flex items-stretch cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900"
             onClick={() => {
               if (isUnread) markRead.mutate(alert.id);
               router.push(`/watches/${alert.watch_id}`);
@@ -60,7 +59,7 @@ export default function AlertList({ alerts, watchNames = {} }: AlertListProps) {
                     {alert.title}
                   </span>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0">
+                <span className="text-xs text-gray-400 shrink-0" title={formatKST(alert.created_at)}>
                   {formatRelative(alert.created_at)}
                 </span>
               </div>
@@ -68,9 +67,13 @@ export default function AlertList({ alerts, watchNames = {} }: AlertListProps) {
                 {alert.body}
               </p>
               {watchNames[alert.watch_id] && (
-                <span className="text-xs text-gray-400 mt-1 inline-block">
+                <Link
+                  href={`/watches/${alert.watch_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-blue-500 hover:underline mt-1 inline-block"
+                >
                   {watchNames[alert.watch_id]}
-                </span>
+                </Link>
               )}
             </div>
 
