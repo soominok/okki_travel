@@ -1,22 +1,33 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-02 (계획 1 완료, 최종 리뷰 반영)
+> 마지막 갱신: 2026-09-04 (계획 4 계획서 작성 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료
-코드       backend(112 테스트 통과) + web(Next 16) · docker compose 4서비스 기동 · 커밋 49개
+단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료 · 계획 4 계획서 작성됨
+코드       backend(112 테스트 통과) + web(Next 16) · docker compose 4서비스 기동
+브랜치     feat/plan2-source-layer (계획 2+3 구현 포함, PR 대기)
 블로커     없음
-다음 할 일 계획 4(알림·규칙 엔진) 또는 feat/plan2-source-layer PR 머지
+다음 할 일 계획 4 실행 (규칙 엔진 + 알림 스택)
 ```
 
 ## 지금 당장 할 일
 
-### feat/plan2-source-layer PR 머지 후 계획 4 착수
+### 계획 4 실행 — `engine/rules.py` 부터
+
+계획서: `docs/superpowers/plans/2026-09-04-04-notify.md`
+설계 스펙: `docs/superpowers/specs/2026-09-04-plan4-notify-design.md`
+
+5개 태스크:
+- **T1** `engine/rules.py` + `engine/baseline.py` (TDD, 14개 테스트)
+- **T2** `engine/dedup.py` + `notify/base.py` + `notify/inapp.py`
+- **T3** `notify/slack.py` + `notify/dispatcher.py`
+- **T4** `collector.py` 통합 + Watch 생성 즉시 수집 트리거
+- **T5** `api/routes/alerts.py` + Worker cleanup/health 잡
 
 계획 3 완료. 브랜치 `feat/plan2-source-layer`에 계획 2+3 전체 구현이 담겨 있다.
 
@@ -53,7 +64,7 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 | 1 | **기반** | ✅ 완료 — `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
 | 2 | **소스 계층** | ✅ 완료 — 3개 어댑터 + 예산 + 레지스트리, 91 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-02-02-source-layer.md) |
 | 3 | **수집 엔진** | ✅ 완료 — Watch CRUD + 수집 파이프라인 + Worker 틱, 112 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-03-03-collector.md) |
-| 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | 미작성 |
+| 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | [계획서](docs/superpowers/plans/2026-09-04-04-notify.md) |
 | 5 | 프론트엔드 | 5화면 | ❌ | 미작성 |
 
 - [x] **계획 1 실행** — 완료 (2026-09-01, 커밋 `c246659`)
