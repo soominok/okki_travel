@@ -1,26 +1,44 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-04 (계획 4 완료)
+> 마지막 갱신: 2026-09-04 (계획 5 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료 · 계획 4(알림 스택) 완료
-코드       backend(148 테스트 통과) + web(Next 16) · docker compose 4서비스 기동
-브랜치     feat/plan2-source-layer (계획 2+3+4 구현 포함, PR 준비)
+단계       계획 1~5 전부 완료. Phase 1 백엔드+프론트엔드 구현 완료
+코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
+브랜치     feat/plan2-source-layer (계획 2~5 구현, HEAD 2ca6a6e)
 블로커     없음
-다음 할 일 PR 생성 후 계획 5(프론트엔드) 착수
+다음 할 일 E2E 검증 (docker compose up → 실제 동선 확인) 또는 PR 생성
 ```
 
 ## 지금 당장 할 일
 
-### 계획 5 — 프론트엔드 5화면
+### E2E 검증
 
-계획서: 미작성 (먼저 `superpowers:brainstorming`으로 설계)
-참고: `docs/04-SCREENS.md`
+```bash
+docker compose up -d --build
+# 백엔드: http://localhost:8000
+# 프론트: cd web && npm run dev (http://localhost:3000)
+```
+
+동선:
+1. `/` 대시보드 — WatchCard, 스파크라인
+2. `/watches/new` — 3스텝 위저드로 감시 등록
+3. `/watches/<id>` — 차트, 오퍼, 히트맵, RunLog
+4. `/alerts` — 알림 목록, 읽음 처리
+5. `/settings` — 슬랙 테스트 발송
+
+**계획 5 완료 현황 (2026-09-04):**
+- T1: TanStack Query + apiFetch + Nav + WorkerDot + format 유틸
+- T2: S1 대시보드 (WatchCard, Sparkline, RecentAlerts)
+- T3: S2 감시 등록 3스텝 위저드
+- T4: S3 감시 상세 (PriceChart Recharts, OfferList, CoverageHeatmap, RunLog)
+- T5: S4 알림함 (AlertList, AlertFilter, useMarkRead)
+- T6: S5 설정 (SlackPanel, SourceStatus, BudgetBar, SamplingPolicy)
 
 **계획 4 완료 현황 (2026-09-04):**
 - T1: engine/rules.py (순수 함수 4종) + engine/baseline.py
@@ -73,7 +91,7 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 - [x] **계획 2 실행** — 완료 (2026-09-03, 커밋 `187a7ba`). 91 테스트 통과
 - [x] **계획 3 실행** — 완료 (2026-09-04, 커밋 `bfee92d`). 112 테스트 통과
 - [x] **계획 4 실행** — 완료 (2026-09-04, 커밋 `fb03a26`). 148 테스트 통과
-- [ ] 계획 5 작성 및 실행
+- [x] **계획 5 실행** — 완료 (2026-09-04, 커밋 `2ca6a6e`). 5화면 구현
 - [ ] E2E 검증 (`PROMPTS.md` P9)
 - [ ] 리뷰·하드닝 (`PROMPTS.md` P10)
 
