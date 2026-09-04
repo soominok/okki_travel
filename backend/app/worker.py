@@ -59,6 +59,25 @@ async def tick() -> None:
                 log.exception("tick.collect_failed", watch_id=str(wid))
 
 
+async def cleanup_old_offers() -> None:
+    """offer_retention_days 초과 offers 삭제."""
+    settings = get_settings()
+    async with SessionLocal() as session:
+        result = await session.execute(
+            text(
+                "DELETE FROM offers WHERE collected_at < now() - "
+                f"interval '{settings.offer_retention_days} days'"
+            )
+        )
+        await session.commit()
+        log.info("worker.cleanup_offers", deleted=result.rowcount)
+
+
+async def source_health_check() -> None:
+    """소스 헬스 체크 stub — Plan 5에서 실제 구현."""
+    log.info("worker.source_health_check")
+
+
 async def main() -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
@@ -66,6 +85,8 @@ async def main() -> None:
 
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(tick, "interval", seconds=60, id="tick", max_instances=1, coalesce=True)
+    scheduler.add_job(cleanup_old_offers, "cron", hour=4, minute=0, max_instances=1, id="cleanup")
+    scheduler.add_job(source_health_check, "interval", minutes=15, max_instances=1, id="health")
     scheduler.start()
 
     try:
