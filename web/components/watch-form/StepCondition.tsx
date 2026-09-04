@@ -138,7 +138,8 @@ export default function StepCondition({ initial = {}, onNext }: StepConditionPro
     form.origin &&
     form.destination &&
     form.date_from &&
-    form.date_to;
+    form.date_to &&
+    form.date_to >= form.date_from;
 
   return (
     <div className="space-y-5">

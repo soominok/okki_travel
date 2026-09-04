@@ -19,6 +19,7 @@ export default function NewWatchPage() {
   const [condition, setCondition] = useState<FlightCondition | null>(null);
 
   const createWatch = useCreateWatch();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   async function handleSave(rules: WatchRule[], intervalHours: number) {
     if (!condition || !watchType) return;
@@ -41,6 +42,7 @@ export default function NewWatchPage() {
       interval_hours: intervalHours,
     });
 
+    setIsRedirecting(true);
     // 즉시 1회 수집 (React 상태 업데이트 비동기성 우회 — apiFetch 직접 호출)
     await apiFetch(`/api/watches/${watch.id}/run`, { method: 'POST' }).catch(() => {});
     router.push(`/watches/${watch.id}`);
@@ -61,6 +63,7 @@ export default function NewWatchPage() {
       )}
       {step === 2 && (
         <StepCondition
+          initial={condition ?? undefined}
           onNext={(cond) => {
             setCondition(cond);
             setStep(3);
@@ -70,7 +73,7 @@ export default function NewWatchPage() {
       {step === 3 && (
         <StepRules
           onSave={handleSave}
-          saving={createWatch.isPending}
+          saving={createWatch.isPending || isRedirecting}
         />
       )}
     </WizardLayout>
