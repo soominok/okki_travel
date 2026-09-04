@@ -1,7 +1,6 @@
 'use client';
 
 import { useWorkerStatus } from '@/hooks/useWorkerStatus';
-import { formatRelative } from '@/lib/format';
 
 const KNOWN_SOURCES = [
   'travelpayouts',
