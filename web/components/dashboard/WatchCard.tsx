@@ -93,7 +93,7 @@ export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
         </div>
       ) : (
         <div className="text-sm text-gray-500">
-          아직 데이터를 못 찾았습니다 (0/{prices.length || 180}칸)
+          아직 데이터를 못 찾았습니다 (0/30칸)
         </div>
       )}
 

@@ -15,6 +15,7 @@ export default function Dashboard() {
     try {
       await apiFetch(`/api/watches/${watchId}/run`, { method: 'POST' });
       qc.invalidateQueries({ queryKey: ['watches', watchId] });
+      qc.invalidateQueries({ queryKey: ['watches'] });
     } catch {
       // 실패해도 조용히 — 다음 주기에 자동 실행됨
     }
