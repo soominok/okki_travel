@@ -266,6 +266,7 @@ async def collect_watch(
         await session.flush()
 
         # 7. PriceSnapshot (offer가 있을 때만)
+        snap: PriceSnapshot | None = None
         if all_offers:
             prices = sorted(o.price_krw for o in all_offers)
             snap = PriceSnapshot(
@@ -279,6 +280,94 @@ async def collect_watch(
             )
             session.add(snap)
             await session.flush()
+
+        # 10. 규칙 평가 + 알림 (snapshot이 있을 때만)
+        if snap is not None and watch.rules:
+            from app.engine.baseline import get_history
+            from app.engine.dedup import is_suppressed, make_dedup_key
+            from app.engine.rules import evaluate_rules
+            from app.models.alert import Alert
+            from app.notify.base import Confidence, Field, NotificationMessage
+            from app.notify.dispatcher import Dispatcher
+
+            history = await get_history(watch_id, days=30, session=session)
+            candidates = evaluate_rules(snap, history, watch.rules)
+            dispatcher = Dispatcher(settings=settings)
+
+            for candidate in candidates:
+                best_offer_obj = min(all_offers, key=lambda o: o.price_krw) if all_offers else None
+                depart_dt = best_offer_obj.depart_date if best_offer_obj else None
+                key = make_dedup_key(
+                    watch_id, candidate.rule_id, candidate.best_price_krw, depart_dt
+                )
+                suppressed = await is_suppressed(
+                    key, candidate.severity, settings.alert_cooldown_hours, session
+                )
+                if suppressed:
+                    log.info("collector.alert_suppressed", rule_id=candidate.rule_id, key=key)
+                    continue
+
+                alert = Alert(
+                    watch_id=watch_id,
+                    rule_id=candidate.rule_id,
+                    severity=candidate.severity,
+                    title=candidate.title,
+                    body=candidate.body,
+                    dedup_key=key,
+                    payload={
+                        "best_price_krw": candidate.best_price_krw,
+                        "depart_date": str(depart_dt) if depart_dt else None,
+                        "deep_link": candidate.deep_link
+                        or (best_offer_obj.deep_link if best_offer_obj else None),
+                    },
+                )
+                session.add(alert)
+                await session.flush()
+
+                freshness = best_offer_obj.freshness if best_offer_obj else "cached"
+                age_label = (
+                    "최대 7일 전 캐시"
+                    if freshness == "cached"
+                    else f"{best_offer_obj.cache_age_days or 0}분 전 실측"
+                    if best_offer_obj
+                    else "알 수 없음"
+                )
+                msg = NotificationMessage(
+                    severity=candidate.severity,
+                    confidence=Confidence(
+                        verified=bool(
+                            best_offer_obj and getattr(best_offer_obj, "verified", False)
+                        ),
+                        freshness=freshness,
+                        age_label=age_label,
+                        source=best_offer_obj.source if best_offer_obj else "unknown",
+                        coverage_pct=int(snap.coverage_pct) if snap.coverage_pct else None,
+                    ),
+                    title=candidate.title,
+                    summary=candidate.body,
+                    fields=[
+                        Field(label="최저가", value=f"{candidate.best_price_krw:,}원"),
+                        *([Field(label="출발일", value=str(depart_dt))] if depart_dt else []),
+                        *(
+                            [Field(label="항공사", value=best_offer_obj.carrier)]
+                            if best_offer_obj and best_offer_obj.carrier
+                            else []
+                        ),
+                    ],
+                    link=candidate.deep_link
+                    or (best_offer_obj.deep_link if best_offer_obj else None),
+                    link_label="예약 바로가기"
+                    if (candidate.deep_link or (best_offer_obj and best_offer_obj.deep_link))
+                    else None,
+                    dedup_key=key,
+                )
+                await dispatcher.dispatch(msg, alert_id=alert.id, session=session)
+                log.info(
+                    "collector.alert_dispatched",
+                    rule_id=candidate.rule_id,
+                    severity=candidate.severity,
+                    watch_id=str(watch_id),
+                )
 
         # 8. WatchRun 완료
         run.finished_at = datetime.now(tz=UTC)

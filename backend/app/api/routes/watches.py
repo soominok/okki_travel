@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import desc, select
@@ -38,6 +39,7 @@ async def create_watch(body: WatchCreate, db: AsyncSession = Depends(get_db)):
         rules=[r.model_dump(mode="json") for r in body.rules],
         interval_min=body.interval_min,
         status="active",
+        next_run_at=datetime.now(tz=UTC),
     )
     db.add(watch)
     await db.commit()
