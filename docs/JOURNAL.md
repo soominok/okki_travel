@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-09-04 · 계획 3(수집 엔진) 완료 — 최종 리뷰 4개 블로킹 수정
+
+### /run 엔드포인트: WatchRun 사전 생성 vs. collect_watch 내부 생성
+
+초기 구현(Ruling R2)에서는 `/run`이 WatchRun을 만들지 않고 collect_watch가 내부에서
+생성하도록 했다. 이중 생성 방지가 목적이었다.
+
+최종 리뷰에서 이를 번복했다. 이유: 클라이언트가 즉시 run_id를 받아
+`GET /runs`로 진행 상황을 폴링할 수 있어야 한다. 상태를 모르면 진행 중인지
+실패했는지 알 수 없다. 해결책: `/run`이 `status='running'` stub을 커밋하고
+`run_id`를 반환, `collect_watch`는 `run_id` 파라미터를 받아 기존 row를 재사용.
+
+### VERIFY 단계 result.offers 누락 버그
+
+VERIFY 결과를 `sources_ok`에만 기록하고 `all_offers.extend(result.offers)`를
+빠뜨렸다. 크레딧을 소모하고도 verified offer가 스냅샷에 반영되지 않는 심각한
+논리 오류. BrightData 크레딧이 아까운 이유가 "확인만 하고 버린다"였다는 점에서
+설계 의도와 완전히 반대되는 결함이었다.
+
+### outer try/except 추가
+
+`collect_watch` 도큐스트링에 "예외를 밖으로 던지지 않는다"고 명시했지만
+DB flush/commit 등 내부 예외가 전파될 수 있었다. outer try/except로 감싸
+session.rollback → run.status='failed' → commit 패턴을 보장. Worker의
+`try/except` 는 이제 진짜 예상치 못한 상황에만 동작하는 이중 방어선이 됐다.
+
+### stay Watch KeyError: destination vs. city_code
+
+FetchRequest 생성 시 `watch.params["destination"]`을 그대로 썼는데,
+stay Watch의 params는 `city_code` 키를 사용한다. VERIFY 요청에서 KeyError가
+발생할 수 있었다. `params.get("destination") or params.get("city_code", "")`로
+두 종류를 모두 처리.
+
+---
+
 ## 2026-09-03 · 계획 2(소스 계층) Task 7 — SourceRegistry + CrawlPolicy
 
 ### sample_cap_ratio 권위: config.py (Plan 2) → app_settings DB (Plan 4 이후)

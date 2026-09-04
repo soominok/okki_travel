@@ -8,23 +8,24 @@
 ## 한눈에
 
 ```
-단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 착수 가능
-코드       backend(91 테스트 통과) + web(Next 16) · docker compose 4서비스 기동 · 커밋 43개
+단계       계획 1(기반) 완료 · 계획 2(소스 계층) 완료 · 계획 3(수집 엔진) 완료
+코드       backend(112 테스트 통과) + web(Next 16) · docker compose 4서비스 기동 · 커밋 49개
 블로커     없음
-다음 할 일 계획 3(수집 엔진) — Watch 수동 실행 → 스냅샷 생성
+다음 할 일 계획 4(알림·규칙 엔진) 또는 feat/plan2-source-layer PR 머지
 ```
 
 ## 지금 당장 할 일
 
-### 계획 3(수집 엔진) 작성·실행
+### feat/plan2-source-layer PR 머지 후 계획 4 착수
 
-계획 2 완료. 다음: 계획 3(수집 엔진) — Watch를 읽어 어댑터를 호출하고 스냅샷을 저장하는 collector 구현.
+계획 3 완료. 브랜치 `feat/plan2-source-layer`에 계획 2+3 전체 구현이 담겨 있다.
 
-**계획 2 완료 현황 (2026-09-03):**
-- Task 4: TravelpayoutsAdapter (flight/scan)
-- Task 5: BrightDataAdapter (flight/verify)
-- Task 6: HotellookAdapter (stay/scan)
-- Task 7: SourceRegistry + CrawlPolicy — 91 테스트 모두 통과
+**계획 3 완료 현황 (2026-09-04):**
+- T1: Watch CRUD 5개 엔드포인트 + 인증 미들웨어
+- T2: SCAN → SAMPLE → VERIFY → PriceSnapshot 수집 파이프라인
+- T3: /run + /snapshots + /runs 엔드포인트
+- T4: Worker 60초 틱 + SELECT FOR UPDATE SKIP LOCKED
+- 최종 리뷰 4개 블로킹 수정 완료
 
 ---
 
@@ -51,14 +52,15 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 |---|---|---|---|---|
 | 1 | **기반** | ✅ 완료 — `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
 | 2 | **소스 계층** | ✅ 완료 — 3개 어댑터 + 예산 + 레지스트리, 91 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-02-02-source-layer.md) |
-| 3 | 수집 엔진 | Watch 수동 실행 → 스냅샷 생성 | ✅ | 미작성 |
+| 3 | **수집 엔진** | ✅ 완료 — Watch CRUD + 수집 파이프라인 + Worker 틱, 112 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-03-03-collector.md) |
 | 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | 미작성 |
 | 5 | 프론트엔드 | 5화면 | ❌ | 미작성 |
 
 - [x] **계획 1 실행** — 완료 (2026-09-01, 커밋 `c246659`)
 - [x] **스파이크 실행** — 완료 (2026-09-02). 판정 🟠, 설계 유지
 - [x] **계획 2 실행** — 완료 (2026-09-03, 커밋 `187a7ba`). 91 테스트 통과
-- [ ] 계획 3~5 작성 및 실행
+- [x] **계획 3 실행** — 완료 (2026-09-04, 커밋 `bfee92d`). 112 테스트 통과
+- [ ] 계획 4~5 작성 및 실행
 - [ ] E2E 검증 (`PROMPTS.md` P9)
 - [ ] 리뷰·하드닝 (`PROMPTS.md` P10)
 
