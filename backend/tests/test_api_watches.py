@@ -106,8 +106,8 @@ async def test_run_returns_202(client):
     r = await client.post(f"/api/watches/{wid}/run", headers=_auth())
     assert r.status_code == 202
     body = r.json()
-    assert body["queued"] is True
-    assert body["watch_id"] == wid
+    assert "run_id" in body
+    _uuid.UUID(body["run_id"])  # 유효한 UUID인지 확인
 
 
 @pytest.mark.asyncio

@@ -92,15 +92,22 @@ async def run_watch(
     if watch.status == "paused":
         raise HTTPException(status_code=409, detail="watch is paused")
 
+    run = WatchRun(watch_id=watch_id, status="running")
+    db.add(run)
+    await db.commit()
+    run_id = run.id
+
     settings = get_settings()
     registry = build_registry(settings)
 
     async def _bg() -> None:
         async with SessionLocal() as s:
-            await collect_watch(watch_id, session=s, registry=registry, settings=settings)
+            await collect_watch(
+                watch_id, run_id=run_id, session=s, registry=registry, settings=settings
+            )
 
     background_tasks.add_task(_bg)
-    return {"queued": True, "watch_id": str(watch_id)}
+    return {"run_id": str(run_id)}
 
 
 @router.get("/{watch_id}/snapshots", response_model=list[SnapshotOut], dependencies=[_auth])
