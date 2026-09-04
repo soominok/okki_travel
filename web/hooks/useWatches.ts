@@ -1,13 +1,37 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/client';
-import type { WatchOut, PriceSnapshotOut } from '@/lib/types';
+import type { WatchOut, WatchCreate, PriceSnapshotOut } from '@/lib/types';
 
 export function useWatches() {
   return useQuery<WatchOut[]>({
     queryKey: ['watches'],
     queryFn: () => apiFetch<WatchOut[]>('/api/watches'),
+  });
+}
+
+export function useCreateWatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: WatchCreate) =>
+      apiFetch<WatchOut>('/api/watches', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['watches'] }),
+  });
+}
+
+export function useRunNow(watchId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/watches/${watchId}/run`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['watches', watchId] });
+      qc.invalidateQueries({ queryKey: ['watches', watchId, 'snapshots'] });
+    },
   });
 }
 
