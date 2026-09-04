@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.models.alert import AlertDelivery
-from app.notify.base import DeliveryResult, NotificationMessage
+from app.notify.base import Confidence, DeliveryResult, Field, NotificationMessage
 from app.notify.inapp import InAppNotifier
 from app.notify.slack import SlackNotifier
 
@@ -30,6 +30,32 @@ def _is_quiet_now(start: time, end: time, now_kst: time | None = None) -> bool:
 class Dispatcher:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+
+    async def test_send(self) -> DeliveryResult:
+        """Slack webhook 테스트 발송. quiet_hours 무시."""
+        webhook = self._settings.slack_webhook_url
+        if webhook is None:
+            raise ValueError("Slack webhook not configured")
+        msg = NotificationMessage(
+            severity="info",
+            confidence=Confidence(
+                verified=False,
+                freshness="live",
+                age_label="테스트 메시지",
+                source="system",
+            ),
+            title="TripPick 알림 테스트",
+            summary="이 메시지가 보이면 슬랙 연동이 정상입니다.",
+            fields=[
+                Field(
+                    label="발송 시각",
+                    value=datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC"),
+                )
+            ],
+            dedup_key="test-message",
+        )
+        notifier = SlackNotifier(webhook_url=webhook.get_secret_value())
+        return await notifier.send(msg)
 
     async def dispatch(
         self,

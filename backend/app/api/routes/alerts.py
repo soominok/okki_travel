@@ -13,11 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_token
 from app.config import get_settings
 from app.models.alert import Alert
-from app.notify.base import Confidence, Field, NotificationMessage
+from app.notify.dispatcher import Dispatcher
 from app.schemas.alert import AlertOut
 
 log = structlog.get_logger()
+
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
+notify_router = APIRouter(prefix="/api/notify", tags=["notify"])
 _auth = Depends(require_token)
 
 
@@ -48,33 +50,15 @@ async def mark_read(alert_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         await db.commit()
 
 
-@router.post("/test", status_code=status.HTTP_200_OK, dependencies=[_auth])
-async def notify_test(db: AsyncSession = Depends(get_db)):
+@notify_router.post("/test", status_code=status.HTTP_200_OK, dependencies=[_auth])
+async def notify_test():
+    """Slack webhook 연동 테스트. quiet_hours 무시하고 직접 발송."""
     settings = get_settings()
-    if settings.slack_webhook_url is None:
-        raise HTTPException(status_code=422, detail="SLACK_WEBHOOK_URL not configured")
-
-    msg = NotificationMessage(
-        severity="info",
-        confidence=Confidence(
-            verified=False, freshness="live", age_label="테스트 메시지", source="system"
-        ),
-        title="TripPick 알림 테스트",
-        summary="이 메시지가 보이면 슬랙 연동이 정상입니다.",
-        fields=[
-            Field(
-                label="발송 시각",
-                value=datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC"),
-            )
-        ],
-        dedup_key="test-message",
-    )
-
-    # 테스트는 quiet_hours 무시하고 직접 slack만 발송
-    from app.notify.slack import SlackNotifier
-
-    notifier = SlackNotifier(webhook_url=settings.slack_webhook_url.get_secret_value())
-    result = await notifier.send(msg)
+    dispatcher = Dispatcher(settings=settings)
+    try:
+        result = await dispatcher.test_send()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if result.status == "failed":
         raise HTTPException(status_code=502, detail=f"slack send failed: {result.error}")
     return {"status": "sent"}
