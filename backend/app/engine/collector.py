@@ -265,6 +265,14 @@ async def collect_watch(
             session.add(db_offer)
         await session.flush()
 
+        # Step 10 전처리: history를 flush 전에 조회 (현재 snap이 history에 포함되지 않도록)
+        if watch.rules:
+            from app.engine.baseline import get_history
+
+            history = await get_history(watch_id, days=30, session=session)
+        else:
+            history: list = []
+
         # 7. PriceSnapshot (offer가 있을 때만)
         snap: PriceSnapshot | None = None
         if all_offers:
@@ -283,14 +291,12 @@ async def collect_watch(
 
         # 10. 규칙 평가 + 알림 (snapshot이 있을 때만)
         if snap is not None and watch.rules:
-            from app.engine.baseline import get_history
             from app.engine.dedup import is_suppressed, make_dedup_key
             from app.engine.rules import evaluate_rules
             from app.models.alert import Alert
             from app.notify.base import Confidence, Field, NotificationMessage
             from app.notify.dispatcher import Dispatcher
 
-            history = await get_history(watch_id, days=30, session=session)
             candidates = evaluate_rules(snap, history, watch.rules)
             dispatcher = Dispatcher(settings=settings)
 

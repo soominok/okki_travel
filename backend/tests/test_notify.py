@@ -80,15 +80,16 @@ async def test_dispatcher_sends_great_even_in_quiet_hours(db_session, migrated_e
     settings.quiet_hours_start = time(23, 0)
     settings.quiet_hours_end = time(8, 0)
 
-    with patch("app.notify.dispatcher._is_quiet_now", return_value=True):
+    with patch("app.notify.dispatcher._is_quiet_now", return_value=True), respx.mock:
+        respx.post("https://hooks.slack.com/test").mock(return_value=Response(200, text="ok"))
         dispatcher = Dispatcher(settings=settings)
         results = await dispatcher.dispatch(
             _msg(severity="great"), alert_id=alert.id, session=db_session
         )
 
     slack_result = next(r for r in results if r.channel == "slack")
-    # great는 quiet를 무시 → deferred가 아니어야 함 (sent 또는 failed)
-    assert slack_result.status != "deferred"
+    # great는 quiet를 무시 → 반드시 sent
+    assert slack_result.status == "sent"
 
 
 # ---------- slack ----------

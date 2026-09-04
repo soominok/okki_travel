@@ -16,7 +16,7 @@ async def get_history(
     days: int,
     session: AsyncSession,
 ) -> list[PriceSnapshot]:
-    """최근 N일간 price_snapshots를 오래된 순으로 반환."""
+    """최근 N일간 price_snapshots를 최근 것 먼저 반환."""
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     result = await session.execute(
         select(PriceSnapshot)
@@ -24,6 +24,6 @@ async def get_history(
             PriceSnapshot.watch_id == watch_id,
             PriceSnapshot.captured_at >= cutoff,
         )
-        .order_by(PriceSnapshot.captured_at)
+        .order_by(PriceSnapshot.captured_at.desc())
     )
     return list(result.scalars().all())
