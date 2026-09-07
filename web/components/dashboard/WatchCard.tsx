@@ -11,13 +11,6 @@ interface WatchCardProps {
   onRunNow?: () => void;
 }
 
-function FreshnessDot({ freshness }: { freshness: 'live' | 'cached' }) {
-  if (freshness === 'live') {
-    return <span className="text-green-500 text-xs">● 실측</span>;
-  }
-  return <span className="text-gray-400 text-xs">○ 캐시 (최대 7일 전)</span>;
-}
-
 export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
   const { data: snaps = [] } = useWatchSparkline(watch.id);
 
@@ -37,7 +30,7 @@ export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
 
   // 목표가 추출 (threshold 규칙에서)
   const thresholdRule = watch.rules.find((r) => r.type === 'threshold');
-  const targetPrice = thresholdRule?.threshold ?? null;
+  const targetPrice = thresholdRule?.type === 'threshold' ? thresholdRule.price_krw : null;
 
   const isPaused = watch.status === 'paused';
   const hasError = watch.status === 'error';
@@ -56,7 +49,7 @@ export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold">{watch.name}</span>
+            <span className="text-base font-semibold">{watch.title}</span>
             {isPaused && (
               <span className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
                 일시중지
@@ -64,8 +57,8 @@ export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
             )}
           </div>
           {latestSnap && (
-            <div className="mt-0.5">
-              <FreshnessDot freshness={latestSnap.freshness} />
+            <div className="mt-0.5 text-xs text-gray-400">
+              {formatRelative(latestSnap.captured_at)}
             </div>
           )}
         </div>
@@ -129,12 +122,6 @@ export default function WatchCard({ watch, onRunNow }: WatchCardProps) {
         </div>
       )}
 
-      {/* 마지막 수집 */}
-      {latestSnap && (
-        <div className="text-xs text-gray-500">
-          {formatRelative(latestSnap.captured_at)}
-        </div>
-      )}
 
       {/* 액션 버튼 */}
       <div className="flex gap-2 mt-1">

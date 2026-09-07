@@ -10,12 +10,12 @@ import StepCondition, {
 import StepRules from '@/components/watch-form/StepRules';
 import { useCreateWatch } from '@/hooks/useWatches';
 import { apiFetch } from '@/lib/client';
-import type { WatchType, WatchRule } from '@/lib/types';
+import type { WatchKind, WatchRule } from '@/lib/types';
 
 export default function NewWatchPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [watchType, setWatchType] = useState<WatchType | null>(null);
+  const [watchType, setWatchType] = useState<WatchKind | null>(null);
   const [condition, setCondition] = useState<FlightCondition | null>(null);
 
   const createWatch = useCreateWatch();
@@ -25,21 +25,22 @@ export default function NewWatchPage() {
     if (!condition || !watchType) return;
 
     const watch = await createWatch.mutateAsync({
-      name: condition.name,
-      type: watchType,
-      query: {
+      kind: watchType,
+      title: condition.name,
+      params: {
+        kind: 'flight' as const,
         origin: condition.origin,
         destination: condition.destination,
-        date_from: condition.date_from,
-        date_to: condition.date_to,
-        nights_from: condition.nights_from,
-        nights_to: condition.nights_to,
-        weekdays: condition.weekdays.length ? condition.weekdays : undefined,
+        depart_from: condition.date_from,
+        depart_to: condition.date_to,
+        nights_min: condition.nights_from ?? null,
+        nights_max: condition.nights_to ?? null,
+        weekday_preference: condition.weekdays.map(String),
         adults: condition.adults,
         direct_only: condition.direct_only,
       },
       rules,
-      interval_hours: intervalHours,
+      interval_min: intervalHours * 60,
     });
 
     setIsRedirecting(true);

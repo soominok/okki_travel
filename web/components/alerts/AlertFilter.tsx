@@ -37,7 +37,7 @@ export default function AlertFilter({
         <option value="">모든 감시</option>
         {watches.map((w) => (
           <option key={w.id} value={w.id}>
-            {w.name}
+            {w.title}
           </option>
         ))}
       </select>

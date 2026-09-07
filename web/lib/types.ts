@@ -2,49 +2,91 @@
 // 자동 생성: npm run gen:api (백엔드 실행 중일 때)
 
 export type WatchStatus = 'active' | 'paused' | 'error';
-export type WatchType = 'flight' | 'stay';
+export type WatchKind = 'flight' | 'stay';
 export type Freshness = 'live' | 'cached';
 export type Severity = 'info' | 'good' | 'great';
 export type RunStatus = 'ok' | 'partial' | 'failed';
 
-export interface WatchRule {
-  id: string;
-  type: 'threshold' | 'drop_pct' | 'all_time_low' | 'new_best';
-  threshold?: number;  // KRW 목표가 (threshold 타입)
-  pct?: number;        // 하락 % (drop_pct 타입)
+// ---------- params ----------
+
+export interface FlightParams {
+  kind: 'flight';
+  origin: string;
+  destination: string;
+  depart_from: string;   // ISO date "2024-09-01"
+  depart_to: string;
+  nights_min?: number | null;
+  nights_max?: number | null;
+  weekday_preference?: string[];
+  adults?: number;
+  cabin?: 'economy' | 'premium' | 'business' | 'first';
+  direct_only?: boolean;
 }
+
+export type WatchParams = FlightParams;
+
+// ---------- rules ----------
+
+export interface ThresholdRule {
+  id: string;
+  type: 'threshold';
+  price_krw: number;
+}
+
+export interface DropPctRule {
+  id: string;
+  type: 'drop_pct';
+  pct: number;
+  baseline?: 'median_14d' | 'median_30d';
+}
+
+export interface AllTimeLowRule {
+  id: string;
+  type: 'all_time_low';
+  min_samples?: number;
+}
+
+export interface NewBestRule {
+  id: string;
+  type: 'new_best';
+  improve_krw?: number;
+}
+
+export type WatchRule = ThresholdRule | DropPctRule | AllTimeLowRule | NewBestRule;
+
+// ---------- watch ----------
 
 export interface WatchOut {
   id: string;
-  name: string;
-  type: WatchType;
-  status: WatchStatus;
-  query: Record<string, unknown>;
+  kind: WatchKind;
+  title: string;
+  params: WatchParams;
   rules: WatchRule[];
-  interval_hours: number;
-  next_run_at: string | null;  // ISO UTC
+  interval_min: number;
+  status: WatchStatus;
   last_run_at: string | null;
+  next_run_at: string | null;
   created_at: string;
 }
 
 export interface WatchCreate {
-  name: string;
-  type: WatchType;
-  query: Record<string, unknown>;
+  kind: WatchKind;
+  title: string;
+  params: WatchParams;
   rules: WatchRule[];
-  interval_hours: number;
+  interval_min: number;
 }
 
+// ---------- snapshots / offers / alerts ----------
+
 export interface PriceSnapshotOut {
-  id: string;
+  id: number;
   watch_id: string;
   min_price_krw: number | null;
   median_price_krw: number | null;
   coverage_pct: number | null;
-  freshness: Freshness;
-  source: string;
-  offer_count: number;
-  captured_at: string;  // ISO UTC
+  offer_count: number | null;
+  captured_at: string;
 }
 
 export interface OfferOut {
@@ -53,7 +95,7 @@ export interface OfferOut {
   price_krw: number;
   price_original: number | null;
   currency: string | null;
-  depart_date: string | null;   // ISO date "2024-11-14"
+  depart_date: string | null;
   return_date: string | null;
   airline: string | null;
   deep_link: string | null;
@@ -78,12 +120,12 @@ export interface WorkerRunOut {
   id: string;
   watch_id: string;
   status: RunStatus;
-  sources_ok: number;
-  sources_failed: number;
-  duration_ms: number | null;
-  error: string | null;
   started_at: string;
   finished_at: string | null;
+  offers_found: number | null;
+  best_price_krw: number | null;
+  credits_used: number | null;
+  error: string | null;
 }
 
 export interface HealthOut {

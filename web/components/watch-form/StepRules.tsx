@@ -30,7 +30,7 @@ export default function StepRules({ onSave, saving = false }: StepRulesProps) {
     const rules: WatchRule[] = [];
     const tp = parseInt(targetPrice.replace(/,/g, ''), 10);
     if (!isNaN(tp) && tp > 0) {
-      rules.push({ id: 'threshold', type: 'threshold', threshold: tp });
+      rules.push({ id: 'threshold', type: 'threshold', price_krw: tp });
     }
     if (useDropPct) {
       rules.push({ id: 'drop_pct', type: 'drop_pct', pct: dropPct });

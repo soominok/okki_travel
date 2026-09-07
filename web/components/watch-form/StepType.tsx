@@ -1,9 +1,9 @@
 'use client';
 
-import type { WatchType } from '@/lib/types';
+import type { WatchKind } from '@/lib/types';
 
 interface StepTypeProps {
-  onSelect: (type: WatchType) => void;
+  onSelect: (type: WatchKind) => void;
 }
 
 export default function StepType({ onSelect }: StepTypeProps) {

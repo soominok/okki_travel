@@ -43,9 +43,9 @@ export default function WatchDetailPage({
 
   const latestSnap = snapshots.at(-1);
   const thresholdRule = watch.rules.find((r) => r.type === 'threshold');
-  const targetPrice = thresholdRule?.threshold;
+  const targetPrice = thresholdRule?.type === 'threshold' ? thresholdRule.price_krw : undefined;
 
-  const query = watch.query as Record<string, string>;
+  const watchParams = watch.params;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-8">
@@ -55,9 +55,9 @@ export default function WatchDetailPage({
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-800">
             ← 대시보드
           </Link>
-          <h1 className="text-xl font-bold mt-1">{watch.name}</h1>
+          <h1 className="text-xl font-bold mt-1">{watch.title}</h1>
           <p className="text-sm text-gray-500">
-            {query.origin} → {query.destination} · {watch.interval_hours}시간마다
+            {watchParams.kind === 'flight' && `${watchParams.origin} → ${watchParams.destination}`} · {Math.round(watch.interval_min / 60)}시간마다
           </p>
         </div>
         <button
@@ -107,13 +107,13 @@ export default function WatchDetailPage({
       </section>
 
       {/* 커버리지 히트맵 */}
-      {query.date_from && query.date_to && (
+      {watchParams.kind === 'flight' && watchParams.depart_from && watchParams.depart_to && (
         <section>
           <h2 className="text-sm font-semibold mb-3">커버리지</h2>
           <CoverageHeatmap
             offers={offers}
-            dateFrom={query.date_from}
-            dateTo={query.date_to}
+            dateFrom={watchParams.depart_from}
+            dateTo={watchParams.depart_to}
           />
         </section>
       )}

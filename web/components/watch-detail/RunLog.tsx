@@ -44,8 +44,8 @@ export default function RunLog({ runs }: RunLogProps) {
                 {formatKST(run.started_at)}
               </span>
               <span className="text-gray-500 text-xs">
-                {run.duration_ms != null
-                  ? `${(run.duration_ms / 1000).toFixed(1)}s`
+                {run.finished_at != null
+                  ? `${((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)}s`
                   : '—'}
               </span>
               {run.error && (

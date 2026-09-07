@@ -16,7 +16,7 @@ export default function AlertsPage() {
   });
   const { data: watches = [] } = useWatches();
 
-  const watchNames = Object.fromEntries(watches.map((w) => [w.id, w.name]));
+  const watchNames = Object.fromEntries(watches.map((w) => [w.id, w.title]));
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
