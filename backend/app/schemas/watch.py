@@ -162,3 +162,20 @@ class SnapshotOut(BaseModel):
     offer_count: int | None = None
     coverage_pct: Decimal | None = None
     credits_used: int | None = None
+
+
+class OfferOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    watch_id: uuid.UUID
+    source: str
+    price_krw: int
+    price_original: Decimal | None = None
+    currency: str | None = Field(None, validation_alias="currency_original")
+    depart_date: date | None = None
+    return_date: date | None = None
+    airline: str | None = Field(None, validation_alias="carrier")
+    deep_link: str | None = None
+    freshness: str
+    collected_at: datetime

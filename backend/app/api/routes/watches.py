@@ -13,9 +13,9 @@ from app.api.deps import get_db, require_token
 from app.config import get_settings
 from app.db import SessionLocal
 from app.engine.collector import collect_watch
-from app.models.price import PriceSnapshot
+from app.models.price import Offer, PriceSnapshot
 from app.models.watch import Watch, WatchRun
-from app.schemas.watch import RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
+from app.schemas.watch import OfferOut, RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
 from app.sources.registry import build_registry
 
 router = APIRouter(prefix="/api/watches", tags=["watches"])
@@ -122,6 +122,21 @@ async def get_snapshots(
         select(PriceSnapshot)
         .where(PriceSnapshot.watch_id == watch_id)
         .order_by(desc(PriceSnapshot.captured_at))
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.get("/{watch_id}/offers", response_model=list[OfferOut], dependencies=[_auth])
+async def get_offers(
+    watch_id: uuid.UUID,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Offer)
+        .where(Offer.watch_id == watch_id)
+        .order_by(desc(Offer.collected_at))
         .limit(limit)
     )
     return result.scalars().all()
