@@ -1,0 +1,24 @@
+[
+  {
+    "hotelId": 788613,
+    "priceFrom": 75000,
+    "priceAvg": 82000,
+    "stars": 4,
+    "locationName": "Fukuoka",
+    "location": {"name": "Fukuoka", "geo": "FUK"},
+    "hotelName": "Hakata Excel Hotel Tokyu",
+    "deeplink": "https://tp.media/r?marker=test&id=1",
+    "photoUrl": "https://photos.hotellook.com/image_v2/..."
+  },
+  {
+    "hotelId": 123456,
+    "priceFrom": 55000,
+    "priceAvg": 60000,
+    "stars": 3,
+    "locationName": "Fukuoka",
+    "location": {"name": "Fukuoka", "geo": "FUK"},
+    "hotelName": "Toyoko Inn Fukuoka Tenjin",
+    "deeplink": "https://tp.media/r?marker=test&id=2",
+    "photoUrl": "https://photos.hotellook.com/image_v2/..."
+  }
+]

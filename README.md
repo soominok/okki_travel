@@ -71,7 +71,7 @@ docker compose exec api alembic upgrade head
 ## 기술 스택
 
 **백엔드** Python 3.12 · FastAPI · SQLAlchemy 2.0(async) · Alembic · APScheduler · httpx · Postgres 16
-**프론트** Next.js 15 · TypeScript · Tailwind v4 · shadcn/ui · TanStack Query · Recharts
+**프론트** Next.js 16 · TypeScript · Tailwind v4 · shadcn/ui · TanStack Query · Recharts
 **인프라** docker-compose 4서비스 (`db` / `api` / `worker` / `web`)
 
 로컬 실행으로 시작하되, 클라우드 이전을 전제로 설계했다 (Postgres 전용, 상태는 전부 DB,

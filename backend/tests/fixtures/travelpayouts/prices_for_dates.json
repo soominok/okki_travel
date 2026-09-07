@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "airline": "ZE",
+      "departure_at": "2026-10-10T08:00:00",
+      "return_at": "2026-10-12T19:30:00",
+      "price": 232000,
+      "destination": "FUK",
+      "origin": "ICN",
+      "transfers": 0,
+      "gate": "Jetradar",
+      "link": "/search/ICN1010FUK09101?marker=test",
+      "flight_number": "ZE201",
+      "duration": 90,
+      "duration_to": 90,
+      "duration_back": 85,
+      "return_transfers": 0
+    },
+    {
+      "airline": "ZE",
+      "departure_at": "2026-10-10T08:00:00",
+      "return_at": "2026-10-11T19:30:00",
+      "price": 215000,
+      "destination": "FUK",
+      "origin": "ICN",
+      "transfers": 0,
+      "gate": "Jetradar",
+      "link": "/search/ICN1010FUK0911?marker=test",
+      "flight_number": "ZE201-1n",
+      "duration": 90,
+      "duration_to": 90,
+      "duration_back": 85,
+      "return_transfers": 0
+    }
+  ],
+  "currency": "KRW"
+}

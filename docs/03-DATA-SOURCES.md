@@ -93,9 +93,9 @@ robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
 
 - 가입: <https://www.travelpayouts.com> → 파트너 가입 → 대시보드에서 API 토큰
 - 핵심 엔드포인트 (`api.travelpayouts.com`):
-  - `/aviasales/v3/prices_for_dates` — 출발/도착/기간별 최저가 목록
-  - `/aviasales/v3/grouped_prices` — 월별/일별 그룹 최저가 (유연한 날짜 감시에 최적)
-  - `/v1/prices/cheap` — 캐시된 최저가
+  - `/aviasales/v3/grouped_prices` ← **SCAN 주력.** 1회 호출로 출발일 ~10일치 획득, `return_at` 포함
+  - `/aviasales/v3/prices_for_dates` ← 보조. 동일 조건에서 날짜 편차 크고 건수 적음
+  - `/v1/prices/cheap` — 캐시된 최저가 (저렴 노선 탐색용)
 - 접근 조건: **제한 없음.** 가입 후 Profile → API token 에서 바로 받는다
   (50,000 MAU 요건은 별개인 *Flight Search* API 이야기다. 혼동하지 말 것)
 - ⚠️ **캐시의 성질이 이 프로젝트 설계 전체를 규정한다:**
@@ -105,6 +105,18 @@ robots.txt가 허용하고 봇 방어가 없는 대상에만 적용한다.
     **(b)** 아무도 검색하지 않은 날짜 조합은 **데이터가 아예 없다**
   - (b)가 "유연한 날짜 감시"라는 차별점을 직접 위협한다 → §4의 SAMPLE 단계가 이걸 메운다
 - 주의: 응답 가격은 편도/통화 파라미터에 좌우된다. `currency=krw` 고정.
+
+**✅ 스파이크 실측 결과 (2026-09-02, ICN→FUK, 2~3박, 3개월):**
+
+| 항목 | 수치 | 해석 |
+|---|---|---|
+| API 호출 수 | 4회 (3개월) | 6시간 주기로도 충분히 감당 |
+| `grouped_prices` 1회 호출 | 출발일 10일치 + `return_at` 포함 | SCAN 주력으로 확정 |
+| `prices_for_dates` 월 평균 | 2~3박 후보 2.7일치 | 단독 사용 시 커버리지 얇음 |
+| 판정 | 🟠 부분 가능, 커버리지 얇음 | SAMPLE(Bright Data) 단계 필수 |
+
+→ **`grouped_prices`를 SCAN 1차 엔드포인트로 쓰고, `prices_for_dates`로 보완한다.**
+→ Travelpayouts가 비운 날짜는 Bright Data SAMPLE이 메운다 (설계 유지).
 
 #### B. Bright Data — Google Flights ⭐ 검증·보강용
 
@@ -267,22 +279,27 @@ class SourceAdapter(Protocol):
 ## 4. 3단계 수집 전략
 
 ```
-[SCAN]   Travelpayouts 로 넓게 훑는다        무료·무제한·캐시가격(2~7일)
-           ↓ 결과를 coverage_cells 에 반영
-[SAMPLE] Bright Data 로 빈칸을 탐색한다      예산 소모·페이싱·라운드로빈
+[SCAN]   grouped_prices → prices_for_dates 순으로 훑는다    무료·무제한·캐시가격(2~7일)
+           ↓ 결과를 coverage_cells 에 반영 (스파이크 실측: 3개월 4회 호출)
+[SAMPLE] Bright Data 로 빈칸을 탐색한다                     예산 소모·페이싱·라운드로빈
            ↓ 캐시에 없던 날짜의 실가격을 확보
-[VERIFY] Bright Data 로 후보를 확인한다      예산 소모·페이싱 없음
+[VERIFY] Bright Data 로 후보를 확인한다                     예산 소모·페이싱 없음
            ↓ 목표가의 VERIFY_THRESHOLD_RATIO 이내 후보만
 [ALERT]  검증 여부를 메시지에 명시하고 발송
 ```
 
 **SAMPLE이 초안에는 없던 단계다.** Travelpayouts 캐시가 사용자 검색 이력 기반이라
 아무도 안 본 날짜는 비어 있고, 그걸 메우지 않으면 "유연한 날짜 감시"가 인기 날짜에서만
-동작한다. 예산으로 커버리지를 사는 단계다.
+동작한다. **스파이크에서 월당 2.7일치 커버리지를 실측 확인했다 — SAMPLE이 필수임이 증명됐다.**
+
+**SCAN 엔드포인트 우선순위 (스파이크 실측 기반):**
+1. `grouped_prices` (주력) — 1회 호출로 출발일 ~10일치, `return_at` 포함해 체류일수 판정 가능
+2. `prices_for_dates` (보완) — 동일 조건에서 건수는 비슷하나 날짜 편차 큼. 1차 이후 추가로 호출
 
 - SAMPLE과 VERIFY는 **같은 어댑터**를 쓴다. 구분은 예산 원장(`call_budgets`)에서만 이뤄진다
 - 검증되지 않은 가격도 알림은 나간다. 대신 메시지에 "최대 7일 전 캐시"를 명시한다
 - 샘플링 정책·티어·포기 규칙은 스펙 §5, 예산 관리는 스펙 §4 참조
+- ~~Amadeus 보강~~ — Amadeus 2026-07-17 완전 폐쇄. 빈 날짜 보강은 전적으로 Bright Data SAMPLE
 
 ---
 
@@ -290,10 +307,11 @@ class SourceAdapter(Protocol):
 
 구현 전에 아래를 받아 `.env`에 넣어둔다. **전부 무료, 카드 등록 불필요.**
 
-- [ ] `TRAVELPAYOUTS_TOKEN` — travelpayouts.com 가입 → Profile → API token
+- [x] `TRAVELPAYOUTS_TOKEN` — travelpayouts.com 가입 → Profile → API token (**2026-09-02 완료**)
 - [ ] `TRAVELPAYOUTS_MARKER` — 동일 대시보드 (딥링크용 파트너 ID)
-- [ ] `BRIGHTDATA_API_KEY` — brightdata.com 가입 → API 키. 카드 불필요
-      - 가입 시 **SERP / Web Scraper API 의 Google Flights 가 카드 없이 쓰이는지 확인**할 것
+- [x] `BRIGHTDATA_API_KEY` — brightdata.com 가입 → SERP API (**2026-09-02 완료**)
+      - ✅ 가정 A5 확인: 카드 없이 SERP API 사용 가능
+      - ✅ 결과 10건/호출 제한 — 최저가 감시 용도로 충분
       - 무료 5,000 크레딧/월. 소진 시 하드 스톱이므로 초과 청구는 없다
 - [ ] `DATA_GO_KR_KEY` — data.go.kr 가입 후 아래 3개 활용신청
       - 한국관광공사_국문 관광정보 서비스_GW

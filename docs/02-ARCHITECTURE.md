@@ -12,13 +12,13 @@
 | ORM | SQLAlchemy 2.0 (async) + Alembic | 마이그레이션 필수 |
 | 검증 | Pydantic v2 / pydantic-settings | 설정도 Pydantic으로 |
 | HTTP 클라이언트 | httpx (async) + tenacity | 재시도/백오프 |
-| 스케줄러 | APScheduler 3.x (SQLAlchemyJobStore) | 잡 상태를 Postgres에 저장 → 재시작 내성 |
+| 스케줄러 | APScheduler 3.x (**메모리 전용**, job store 없음) | 60초 틱 1개만. 스케줄의 진실은 `watches.next_run_at` (§7) |
 | 크롤링(보조) | Playwright (Python) | 정책 게이트 통과 시에만 |
 | 로깅 | structlog (JSON) | 클라우드 이전 대비 |
 | 테스트 | pytest + pytest-asyncio + respx | respx로 HTTP 목킹 |
 | 린트/포맷 | ruff | black+isort+flake8 대체 |
 
-### 프론트엔드 — Next.js 15 (App Router)
+### 프론트엔드 — Next.js 16 (App Router)
 
 | 영역 | 선택 |
 |---|---|
@@ -52,7 +52,8 @@
                           │   Postgres :5432    │
                           │  watches, snapshots,│
                           │  offers, alerts,    │
-                          │  apscheduler_jobs   │
+                          │  call_budgets,      │
+                          │  coverage_cells     │
                           └──────────▲──────────┘
                                      │
 ┌────────────────────────────────────┴─────────────────────────┐
@@ -199,6 +200,8 @@ watch_runs (
   sources_failed jsonb,                  -- {source: error}
   offers_found   int,
   best_price_krw int,
+  credits_used   int,          -- 스펙 §6 (유료 소스 소모량)
+  note           text,         -- 커버리지 게이트 보류 사유 등
   error          text
 )
 
@@ -266,7 +269,9 @@ alert_deliveries (
   id         uuid pk,
   alert_id   uuid fk,
   channel    text,                       -- slack | telegram | inapp
-  status     text,                       -- sent | failed | skipped
+  status     text,                       -- sent | failed | skipped | deferred
+                                         -- deferred = QUIET_HOURS 로 미뤄짐.
+                                         --   버린 게 아니라 아침 다이제스트로 나간다 (§6)
   error      text,
   sent_at    timestamptz
 )
@@ -310,8 +315,8 @@ alter table offers          add column freshness text not null,      -- live | c
                             add column observed_at timestamptz,      -- 소스가 안 주면 NULL
                             add column verified bool not null default false,
                             add column verify_run_id uuid;
-alter table price_snapshots add column coverage_pct numeric,         -- ★ 아래 주의
-                            add column live_ratio numeric,
+alter table price_snapshots add column coverage_pct numeric,         -- ★ 아래 주의. 0~100
+                            add column live_pct numeric,             -- 0~100 (퍼센트로 통일)
                             add column credits_used int;
 alter table watches         add column last_sampled_at timestamptz;  -- 샘플링 라운드로빈
 alter table watch_runs      add column credits_used int;
@@ -568,9 +573,14 @@ Cloud Scheduler / EventBridge / cron이 60초마다 호출하는 것으로 **워
 # --- Core ---
 APP_ENV=local
 APP_API_TOKEN=change-me-to-a-long-random-string
-DATABASE_URL=postgresql+asyncpg://trip:trip@db:5432/trippick
-TZ=Asia/Seoul
+# ⚠️ 호스트 측 명령(alembic·pytest·로컬 uvicorn)만 이 값을 쓴다.
+#    compose 가 api/worker 컨테이너에는 environment: 로 db:5432 를 따로 주입한다.
+#    호스트 포트가 5434 인 이유: 5432·5433 을 다른 프로젝트 컨테이너가 점유 중이었다.
+DATABASE_URL=postgresql+asyncpg://trip:trip@localhost:5434/trippick
+TZ=Asia/Seoul                  # 표시 계층용. 컨테이너는 compose 가 TZ=UTC 로 덮는다
 PUBLIC_WEB_URL=http://localhost:3000
+LOG_LEVEL=INFO
+API_BASE_URL=http://api:8000   # web 서버 사이드 전용. NEXT_PUBLIC_ 금지
 
 # --- Sources (없으면 해당 어댑터만 비활성) ---
 TRAVELPAYOUTS_TOKEN=
@@ -579,6 +589,7 @@ BRIGHTDATA_API_KEY=
 BRIGHTDATA_MONTHLY_CREDITS=5000
 BRIGHTDATA_SAMPLE_CAP_RATIO=0.70
 DATA_GO_KR_KEY=
+EXIM_API_KEY=                  # 환율 폴백 (koreaexim.go.kr)
 
 # --- Notify ---
 NOTIFY_CHANNELS=slack,inapp
@@ -590,6 +601,7 @@ QUIET_HOURS=23:00-08:00        # 이 시간대는 great 등급만 발송
 
 # --- Collect ---
 DEFAULT_INTERVAL_MIN=360
+OFFER_RETENTION_DAYS=90
 VERIFY_THRESHOLD_RATIO=1.15    # 목표가의 115% 이내면 Bright Data로 실가격 검증
 CRAWL_ENABLED=false            # 기본 off. 켜도 policy.py 게이트를 통과해야 함
 CRAWL_MIN_INTERVAL_SEC=5

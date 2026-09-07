@@ -1,0 +1,40 @@
+[project]
+name = "trippick-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "apscheduler>=3.11,<4",
+    "structlog>=24.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]  # FastAPI Depends() in function defaults — false positive
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# 픽스처의 루프 스코프만 세션으로 만든다. 테스트 함수는 기본값(function)이므로
+# 세션 스코프 엔진은 반드시 NullPool 이어야 한다 (conftest 참조).
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]

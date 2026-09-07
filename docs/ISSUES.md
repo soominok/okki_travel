@@ -7,6 +7,139 @@
 
 ---
 
+## I-007 · 컨테이너 안에서 pytest 를 돌리면 39개 전부 실패한다 (오탐)
+
+- **날짜** 2026-09-02
+- **증상** `docker compose exec api uv run pytest` 가 테스트 39개 전부 DB 접속 실패로 죽는다.
+  호스트에서 돌리면 전부 통과한다
+- **원인** `.env` 의 `DATABASE_URL` 은 **호스트 전용**(`localhost:5434`)이다. compose 가
+  api/worker 컨테이너에는 `environment:` 로 `db:5432` 를 따로 주입하는데, `pytest` 는
+  `conftest.py` 의 `pytest_configure` 가 `DATABASE_URL` 을 테스트 DB URL(역시 localhost)로
+  덮어쓰므로 컨테이너 안에서는 그 호스트명을 해석할 수 없다
+- **해결** 테스트는 **호스트에서** 돌린다 (`cd backend && uv run pytest`). CLAUDE.md 의
+  명령어 절이 이미 그렇게 문서화하고 있다
+- **교훈**
+  1. 이 프로젝트에서 `DATABASE_URL` 은 **소비자에 따라 값이 다르다** — 호스트 명령은
+     `localhost:5434`, 컨테이너는 compose 가 주입하는 `db:5432`. 의도된 설계다(I-010 참조 불필요)
+  2. "전부 실패"는 코드 결함보다 **환경 오배치**를 먼저 의심한다. 39개가 한꺼번에
+     같은 이유로 죽으면 그건 테스트가 아니라 연결 문제다
+
+---
+
+## I-011 · alembic autogenerate 는 생성 칼럼(Computed)을 diff 하지 못한다
+
+- **날짜** 2026-09-02
+- **증상** `alembic revision --autogenerate` 실행 시 경고:
+  `Computed default on watches.destination cannot be modified`
+- **원인** alembic 은 `GENERATED ALWAYS AS (...) STORED` 칼럼의 **식(expression)을 비교하지
+  못한다.** 최초 생성은 정상 반영되지만, 이후 식을 바꾸면 **감지하지 못하고 조용히 넘어간다**
+- **해결** 지금은 조치 불필요(최초 생성은 정상). 다만 **식을 바꿀 때는 수동 마이그레이션**을
+  써야 한다
+- **교훈**
+  1. **Phase 2 에서 이걸 밟는다.** 취향 추천이 `watches.destination` 을 쓰는데,
+     `StayParams` 에는 `destination` 이 없어 stay watch 는 이 칼럼이 항상 NULL 이다.
+     숙소 목적지도 인덱싱하려면 생성 칼럼 식을 `kind` 별로 분기해야 하고,
+     **그때 autogenerate 는 아무것도 만들어주지 않는다**
+  2. 생성 칼럼·확장(EXTENSION)·트리거처럼 autogenerate 가 못 보는 것들은
+     마이그레이션을 손으로 쓴다는 것을 전제로 설계한다
+
+---
+
+## I-010 · compose up 직후 pytest 를 돌리면 전부 에러난다 (거짓 빨간불)
+
+- **날짜** 2026-09-02
+- **증상** `docker compose up -d --build` 직후 `uv run pytest` → **39 errors**.
+  실행 시간이 평소 5초에서 **40초**로 늘어난 것이 단서였다. 잠시 후 재실행하니 39 passed
+- **원인** db 컨테이너가 아직 기동 중인데 호스트 측 pytest 가 바로 붙었다.
+  compose 의 healthcheck 는 api/worker 의 `depends_on` 만 막아주고,
+  **호스트에서 도는 pytest 는 그 게이트를 통과하지 않는다**
+- **해결** db 가 준비될 때까지 기다렸다가 재실행. 근본 해결은 `_ensure_test_database`
+  픽스처에 접속 재시도를 넣는 것 (deferred)
+- **교훈**
+  1. **거짓 빨간불도 비용이다.** 코드를 의심하며 시간을 쓰게 만든다
+  2. I-007 과 같은 신호: **전부 한꺼번에 같은 이유로 죽으면 환경을 먼저 본다.**
+     여기에 더해 **실행 시간이 비정상적으로 길면 타임아웃/재시도를 의심**한다
+  3. `docker compose up` 과 `pytest` 사이에는 db 준비 대기가 필요하다
+
+---
+
+## I-009 · 안전장치 검증이 조용히 통과했다 — Next.js private route 때문
+
+- **날짜** 2026-09-02
+- **증상** `import "server-only"` 가드가 실제로 빌드를 막는지 확인하려고 `"use client"`
+  컴포넌트에서 `serverFetch` 를 import 하는 임시 라우트를 만들었는데, **빌드가 그냥 통과했다**
+- **원인** 폴더명을 `_guard-test` 로 지었다. Next.js 는 `_` 로 시작하는 폴더를
+  **private route** 로 취급해 라우팅에서 제외하므로, 그 파일이 아예 빌드 대상이 아니었다
+- **해결** `guard-test` 로 바꿔 재시도 → `Error: 'server-only' cannot be imported from a
+  Client Component module` 로 정상 실패 확인
+- **교훈**
+  1. **I-006 과 같은 실패 모드다.** "검증했는데 통과했다"가 곧 "안전하다"는 아니다.
+     검증 코드가 **실행되기는 했는지**를 먼저 의심해야 한다
+  2. 안전장치를 넣었으면 **일부러 깨서 정말 막히는지** 본다. 이번엔 그 확인 지시가
+     있었기 때문에 두 번째 시도까지 갔고, 없었다면 "가드 넣었습니다"로 끝났을 것이다
+  3. Next.js 에서 `_` 접두사 폴더는 빌드에서 빠진다. 테스트용 라우트를 만들 때 주의
+
+---
+
+## I-008 · docker compose up --build 가 메모리 부족으로 worker 를 죽인다
+
+- **날짜** 2026-09-02
+- **증상** `docker compose up -d --build` 중 worker 가 `OSError: Cannot allocate memory`
+  로 종료. 그리고 호스트에 남은 stray `node.exe` 가 포트 3000 을 점유해 web 이 못 뜸
+- **원인** 4서비스를 동시에 빌드하면 메모리 경합이 난다. 이전 세션의 dev 서버 프로세스가
+  살아남아 포트를 잡고 있는 것은 별개 문제
+- **해결** 잔여 프로세스를 죽이고 `docker compose down -v && up -d --build` 재시도
+- **교훈** 4서비스 동시 빌드가 실패하면 **코드 문제로 오해하지 말 것.** 잔여 프로세스
+  확인(`netstat`/`Get-Process node`) 후 `down -v` 로 완전 초기화하고 재시도한다
+
+---
+
+## I-006 · 중복 FK 경로 때문에 CASCADE 테스트가 아무것도 검증하지 않았다
+
+- **날짜** 2026-09-01
+- **증상** `watches → watch_runs → offers` 3단 CASCADE 를 검증한다고 만든 테스트가,
+  `offers.run_id` 의 `ondelete` 를 `NO ACTION` 으로 바꿔도 **그대로 초록**이었다
+- **원인** `offers` 는 `watches` 로 가는 FK 를 **두 개** 갖는다 — `run_id`(watch_runs 경유)와
+  `watch_id`(직접). `DELETE FROM watches` 는 `watch_id` 경로만으로 offers 를 지워버리므로
+  `run_id` 의 설정은 검사 대상조차 되지 않는다.
+  (Postgres 의 NOT DEFERRABLE 제약은 행이 아니라 **문장 단위**로 검사된다)
+- **실측 확인**
+  ```
+  run_id=NO ACTION + DELETE FROM watches     -> 성공, offers 0행   (테스트 초록 = 거짓)
+  run_id=NO ACTION + DELETE FROM watch_runs  -> FK violation       (테스트 빨간불 = 참)
+  run_id=CASCADE   + DELETE FROM watch_runs  -> 성공, offers 0행   (테스트 초록 = 참)
+  ```
+- **해결** 중간 테이블(`watch_runs`)을 **직접** 삭제해 검증 대상 경로를 고립시킨다
+- **교훈**
+  1. **CASCADE 테스트는 검증하려는 FK 경로를 고립시켜야 한다.** 최상위 부모를 지우면
+     중복 경로가 결과를 만들어내고, 테스트는 통과하지만 아무것도 보장하지 않는다
+  2. 테스트를 만들 때 **"이 제약을 깨면 정말 빨간불이 되는가"를 실제로 깨봐야 한다.**
+     롤백 트랜잭션 안에서 `ALTER TABLE ... DROP/ADD CONSTRAINT` 로 안전하게 확인할 수 있다
+  3. 이 프로젝트의 여러 테이블이 `watches` 를 직접 참조하므로(`offers`, `alerts`,
+     `coverage_cells`) 같은 함정이 반복된다. 중간 테이블 경유 FK 를 검증할 때 특히 주의
+
+---
+
+## I-005 · 마이그레이션 파일을 직접 고치면 테스트가 옛 스키마로 통과한다
+
+- **날짜** 2026-09-01
+- **증상** 마이그레이션 파일을 수정했는데 `alembic upgrade head` 가 아무것도 하지 않고,
+  테스트는 **옛 스키마 위에서 초록으로 통과**했다
+- **원인** alembic 은 `alembic_version` 테이블의 리비전 ID 로만 적용 여부를 판단한다.
+  리비전 ID 를 바꾸지 않고 파일 내용만 고치면 이미 스탬프된 DB 에는 no-op 이다.
+  개발 DB 뿐 아니라 **테스트 DB(`trippick_test`)도 따로 스탬프를 갖는다**
+- **해결** `migrated_engine` 픽스처가 매 세션 `alembic downgrade base && upgrade head`
+  왕복을 돌게 바꿨다. 파일과 스키마가 항상 일치하고, 부수적으로 downgrade 경로가
+  매번 실행돼 `op.drop_constraint(None, ...)` 류의 결함이 즉시 드러난다
+- **교훈**
+  1. **초기 개발 중 마이그레이션 파일 직접 수정은 유효한 선택이지만**(아직 공유 전이라
+     새 ALTER 마이그레이션을 쌓는 것보다 깨끗하다), **스탬프된 DB 를 되감아야 한다**
+  2. 더 나쁜 건 "고쳤는데 테스트가 통과한다"는 상태다. 실패보다 **조용한 거짓 초록**이
+     위험하다 — 그래서 사람 절차(잊기 쉬움)가 아니라 픽스처(항상 실행)로 막았다
+  3. 공유된 뒤에는 절대 직접 수정하지 않는다. 그때는 새 마이그레이션이 유일한 답이다
+
+---
+
 ## I-004 · Bash 도구에서 PowerShell here-string이 그대로 커밋 메시지에 들어감
 
 - **날짜** 2026-09-01

@@ -1,65 +1,86 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-01
+> 마지막 갱신: 2026-09-07 (E2E 검증 중, 스키마 불일치 수정 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       설계 완료 · 구현 시작 전
-코드       0줄 (스파이크 스크립트 제외) · 계획 1 실행 준비 완료
-블로커     API 토큰 미발급 → 스파이크 실행 불가
-다음 할 일 계획 1(기반) 실행 ← 토큰 없이 가능 / 토큰 받으면 스파이크
+단계       Phase 1 완료. PR 생성됨 (feat/plan2-source-layer → master)
+코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
+브랜치     feat/plan2-source-layer (HEAD ea532aa) — PR 오픈 중
+블로커     없음
+다음 할 일 PR 머지 → Phase 2 설계 시작
 ```
 
 ## 지금 당장 할 일
 
-### 1. API 토큰 2개 발급 (약 15분, 무료, 카드 불필요)
+### 미구현 엔드포인트 추가
 
-- [ ] **Travelpayouts** — <https://www.travelpayouts.com> 가입 → Profile → API token
-      - 이게 가장 급하다. 이것만 있으면 스파이크를 돌릴 수 있다
-- [ ] **Bright Data** — <https://brightdata.com> 가입 → API 키
-      - 가입 시 **SERP / Web Scraper API의 Google Flights가 카드 없이 되는지 확인**할 것
-      - 안 되면 스펙 §8 가정 A5가 깨진 것 → VERIFY 소스 재선정 필요
+`GET /api/watches/{id}/offers` — 백엔드에 없음. 프론트 상세 페이지가 404로 빈 목록 표시.
+`backend/app/api/routes/watches.py`에 route 추가 필요 (Plan 3 T3에서 누락).
 
-나머지 키(`DATA_GO_KR_KEY`, `EXIM_API_KEY`, `SLACK_WEBHOOK_URL`)는 P6~P7 전까지 하면 된다.
-
-### 2. 스파이크 실행 — **코드 쓰기 전에 반드시**
+### 로컬 개발 환경
 
 ```bash
-python spikes/travelpayouts_probe.py
+docker compose up -d          # 백엔드 (http://localhost:8000)
+cd web && npm run dev          # 프론트 (http://localhost:5000)
 ```
 
-이 프로젝트의 핵심 차별점("유연한 날짜 감시")이 실제로 가능한지 아직 **아무도 확인하지 않았다.**
-스펙 §8의 가정 5개 중 A1~A4가 여기서 판명된다.
-
-출력 판정에 따라:
-
-| 판정 | 의미 | 대응 |
-|---|---|---|
-| 🟢 | 월 1회 호출로 충분 | 설계대로. 샘플링 예산 낮게 |
-| 🟠 | 커버리지 얇음 | 설계대로. 샘플링이 제 역할 |
-| 🔴 | 날짜별 호출만 가능 | `max_span_days=1`로 두고 샘플링 주력. **코드 구조는 안 바뀐다** |
-
-결과를 그대로 붙여넣고 `PROMPTS.md` §0-5의 프롬프트를 실행한다.
-
-> 토큰 발급과 스파이크는 **계획 1과 병행 가능**하다. 계획 1은 토큰이 필요 없다.
-
-### 3. 계획 1(기반) 실행 — 지금 바로 가능
-
-[계획서](docs/superpowers/plans/2026-09-01-01-foundation.md)를 열고, 아래 중 하나로 실행한다.
-
+`web/.env.local` 필수:
 ```
-/superpowers:subagent-driven-development
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_TOKEN=<APP_API_TOKEN 값>
+API_BASE_URL=http://localhost:8000
 ```
-태스크마다 새 서브에이전트(Sonnet)를 띄우고 사이사이 리뷰. 빠르고 컨텍스트가 깨끗하다.
 
-```
-/superpowers:executing-plans
-```
-현재 세션에서 순차 실행. 중간 개입이 쉽다.
+`backend/.env`: `PUBLIC_WEB_URL=http://localhost:5000`
+
+### E2E 검증 현황 (2026-09-07)
+
+- [x] 슬랙 Webhook 설정 + 테스트 발송 성공
+- [x] 감시 등록 (`/watches/new` → 3스텝 위저드 → DB 저장)
+- [x] 감시 상세 리다이렉트 정상
+- [ ] 오퍼 목록 (백엔드 `/offers` 엔드포인트 없음)
+- [ ] 가격 차트 데이터 쌓임 확인 (수집 1회 이상 필요)
+- [ ] 알림 수신 + 읽음 처리
+- [ ] `/settings` 워커 상태 표시 (web/.env.local에 API_BASE_URL 추가 후 확인)
+
+### 스키마 불일치 수정 내역 (2026-09-07, 커밋 c1ecb13)
+
+프론트-백엔드 필드명 불일치로 인한 422 오류 수정 완료:
+- `name/type/query/interval_hours` → `title/kind/params/interval_min`
+- `ThresholdRule.threshold` → `ThresholdRule.price_krw`
+- `weekdays: number[]` → `.map(String)` 변환
+- `duration_ms` 미존재 필드 → `finished_at - started_at` 계산으로 대체
+- `WatchType` → `WatchKind` import 수정
+
+**계획 5 완료 현황 (2026-09-04):**
+- T1: TanStack Query + apiFetch + Nav + WorkerDot + format 유틸
+- T2: S1 대시보드 (WatchCard, Sparkline, RecentAlerts)
+- T3: S2 감시 등록 3스텝 위저드
+- T4: S3 감시 상세 (PriceChart Recharts, OfferList, CoverageHeatmap, RunLog)
+- T5: S4 알림함 (AlertList, AlertFilter, useMarkRead)
+- T6: S5 설정 (SlackPanel, SourceStatus, BudgetBar, SamplingPolicy)
+
+**계획 4 완료 현황 (2026-09-04):**
+- T1: engine/rules.py (순수 함수 4종) + engine/baseline.py
+- T2: engine/dedup.py + notify/base.py + notify/inapp.py
+- T3: notify/slack.py (Block Kit) + notify/dispatcher.py (QUIET_HOURS)
+- T4: collector.py Step 10 통합 + Watch 생성 즉시 수집 트리거
+- T5: GET /api/alerts + POST /api/alerts/{id}/read + POST /api/notify/test + Worker cleanup/health 잡
+- 최종 리뷰 2개 블로킹 수정 완료 (eval_all_time_low 버그, respx 목킹)
+
+계획 3 완료. 브랜치 `feat/plan2-source-layer`에 계획 2+3 전체 구현이 담겨 있다.
+
+**계획 3 완료 현황 (2026-09-04):**
+- T1: Watch CRUD 5개 엔드포인트 + 인증 미들웨어
+- T2: SCAN → SAMPLE → VERIFY → PriceSnapshot 수집 파이프라인
+- T3: /run + /snapshots + /runs 엔드포인트
+- T4: Worker 60초 틱 + SELECT FOR UPDATE SKIP LOCKED
+- 최종 리뷰 4개 블로킹 수정 완료
 
 ---
 
@@ -76,6 +97,7 @@ python spikes/travelpayouts_probe.py
 | 2026-09-01 | git 초기화, 기록 체계 구축 |
 | 2026-09-01 | **A2 계획 1(기반) 작성** — 8태스크, TDD 스텝별 코드 포함 |
 | 2026-09-01 | 서브에이전트 정의 2종 (`impl`=Sonnet, `reviewer`=Opus) |
+| 2026-09-01 | **계획 1(기반) 완료** — backend 39테스트 통과, `web/` 스캐폴딩(Next 16), `docker compose up` 으로 4서비스 전부 기동·`/healthz` 프록시·토큰 유출 없음 확인 (커밋 `c246659`) |
 
 ## 미완료 — 계획 단위
 
@@ -83,20 +105,25 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 
 | # | 계획 | 산출물 | 스파이크 필요 | 문서 |
 |---|---|---|---|---|
-| 1 | **기반** | `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
-| 2 | 소스 계층 | 실제 가격을 가져오는 어댑터 + 예산 | ✅ | 미작성 |
-| 3 | 수집 엔진 | Watch 수동 실행 → 스냅샷 생성 | ✅ | 미작성 |
-| 4 | 알림·API·스케줄러 | 슬랙 알림 도착, 자동 실행 | ❌ | 미작성 |
+| 1 | **기반** | ✅ 완료 — `docker compose up` → `/healthz` 200, 테이블 14개 | ❌ | [계획서](docs/superpowers/plans/2026-09-01-01-foundation.md) |
+| 2 | **소스 계층** | ✅ 완료 — 3개 어댑터 + 예산 + 레지스트리, 91 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-02-02-source-layer.md) |
+| 3 | **수집 엔진** | ✅ 완료 — Watch CRUD + 수집 파이프라인 + Worker 틱, 112 테스트 통과 | ✅ | [계획서](docs/superpowers/plans/2026-09-03-03-collector.md) |
+| 4 | 알림·API·스케줄러 | ✅ 완료 — 규칙 엔진 + 슬랙 알림 + Alert API + Worker 잡, 148 테스트 통과 | ❌ | [계획서](docs/superpowers/plans/2026-09-04-04-notify.md) |
 | 5 | 프론트엔드 | 5화면 | ❌ | 미작성 |
 
-- [ ] **스파이크 실행** (블로커: 토큰). 계획 2·3의 선행 조건
-- [ ] **계획 1 실행** ← **지금 바로 가능.** 토큰 불필요
-- [ ] 계획 2~5 작성 및 실행
-- [ ] E2E 검증 (`PROMPTS.md` P9)
-- [ ] 리뷰·하드닝 (`PROMPTS.md` P10)
+- [x] **계획 1 실행** — 완료 (2026-09-01, 커밋 `c246659`)
+- [x] **스파이크 실행** — 완료 (2026-09-02). 판정 🟠, 설계 유지
+- [x] **계획 2 실행** — 완료 (2026-09-03, 커밋 `187a7ba`). 91 테스트 통과
+- [x] **계획 3 실행** — 완료 (2026-09-04, 커밋 `bfee92d`). 112 테스트 통과
+- [x] **계획 4 실행** — 완료 (2026-09-04, 커밋 `fb03a26`). 148 테스트 통과
+- [x] **계획 5 실행** — 완료 (2026-09-04, 커밋 `2ca6a6e`). 5화면 구현
+- [x] **E2E 검증** — 완료 (2026-09-07). 감시 등록·수집·오퍼 30건·홈 가격 표시 확인
+- [x] **PR 생성** — 완료 (2026-09-07). feat/plan2-source-layer → master
+- [ ] PR 머지
+- [ ] Phase 2 설계 시작
 
-**계획 1을 먼저 도는 게 낫다.** 스파이크와 무관하므로 토큰을 기다릴 필요가 없고,
-이걸 구현하는 동안 토큰을 받으면 곧장 계획 2로 이어진다.
+**다음은 계획 2(소스 계층)다.** 스파이크(`python spikes/travelpayouts_probe.py`) 결과가 선행 조건이므로,
+토큰 발급 → 스파이크 실행 → 결과를 `PROMPTS.md` §0-5 프롬프트에 붙여 계획 2를 작성한다.
 
 ---
 
@@ -121,6 +148,9 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 | 위험 | 상태 | 대응 |
 |---|---|---|
 | 유연 날짜 검색이 불가능할 수 있음 | **미확인** | 스파이크가 답한다. capability 값으로 흡수되도록 설계됨 |
+| `sample_cap_ratio` 의 진실의 원천이 둘 | **미정** | env(`config.py`) ↔ DB(`app_settings`). 스펙 §6은 "재배포 없이 수정"을 요구하므로 **DB가 권위**여야 한다. **Plan 2 계획서에서 못 박을 것** |
+| `QUIET_HOURS` 가 어느 시간대인지 코드가 모름 | **미정** | `.env` 주석은 KST, 컨테이너는 UTC, `config.py`는 naive `time`. Plan 4 디스패처가 9시간 어긋난다. **Plan 4 전에 정할 것** |
+| `db.py` 가 임포트 시점에 엔진 생성 | **미정** | Plan 3 collector 가 첫 소비자. 그 전에 `get_engine()` lru_cache 로 바꾸거나 sessionmaker 주입으로 |
 | Bright Data가 카드를 요구할 수 있음 | **미확인** | 가입 시 판명. 안 되면 VERIFY 소스 재선정 |
 | 여행 API가 또 닫힐 수 있음 | 진행형 | 어댑터 교체가 파일 1개. `source_health`가 죽은 소스를 자동 비활성화 |
 | 상수들이 전부 추측 | 의도됨 | `app_settings`에서 재배포 없이 수정. `probe_log`가 근거 제공 |
