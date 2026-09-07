@@ -8,11 +8,11 @@
 ## 한눈에
 
 ```
-단계       Phase 1 완료. PR 생성됨 (feat/plan2-source-layer → master)
+단계       Phase 1 완료·머지. Phase 2 설계 시작 전
 코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
-브랜치     feat/plan2-source-layer (HEAD ea532aa) — PR 오픈 중
+브랜치     master (Phase 1 전체 머지 완료, 2026-09-07)
 블로커     없음
-다음 할 일 PR 머지 → Phase 2 설계 시작
+다음 할 일 docs/05-ROADMAP.md 확인 → Phase 2 브레인스토밍 → 새 브랜치 생성
 ```
 
 ## 지금 당장 할 일
@@ -118,8 +118,7 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 - [x] **계획 4 실행** — 완료 (2026-09-04, 커밋 `fb03a26`). 148 테스트 통과
 - [x] **계획 5 실행** — 완료 (2026-09-04, 커밋 `2ca6a6e`). 5화면 구현
 - [x] **E2E 검증** — 완료 (2026-09-07). 감시 등록·수집·오퍼 30건·홈 가격 표시 확인
-- [x] **PR 생성** — 완료 (2026-09-07). feat/plan2-source-layer → master
-- [ ] PR 머지
+- [x] **PR 생성·머지** — 완료 (2026-09-07). feat/plan2-source-layer → master
 - [ ] Phase 2 설계 시작
 
 **다음은 계획 2(소스 계층)다.** 스파이크(`python spikes/travelpayouts_probe.py`) 결과가 선행 조건이므로,
