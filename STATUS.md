@@ -1,36 +1,61 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-04 (계획 5 완료)
+> 마지막 갱신: 2026-09-07 (E2E 검증 중, 스키마 불일치 수정 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       계획 1~5 전부 완료. Phase 1 백엔드+프론트엔드 구현 완료
+단계       계획 1~5 전부 완료. E2E 검증 진행 중
 코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
-브랜치     feat/plan2-source-layer (계획 2~5 구현, HEAD 2ca6a6e)
-블로커     없음
-다음 할 일 E2E 검증 (docker compose up → 실제 동선 확인) 또는 PR 생성
+브랜치     feat/plan2-source-layer (HEAD c1ecb13)
+블로커     GET /api/watches/{id}/offers 엔드포인트 백엔드 미구현 (404, 비치명적)
+다음 할 일 /offers 엔드포인트 추가 → 전체 E2E 통과 → PR 생성
 ```
 
 ## 지금 당장 할 일
 
-### E2E 검증
+### 미구현 엔드포인트 추가
+
+`GET /api/watches/{id}/offers` — 백엔드에 없음. 프론트 상세 페이지가 404로 빈 목록 표시.
+`backend/app/api/routes/watches.py`에 route 추가 필요 (Plan 3 T3에서 누락).
+
+### 로컬 개발 환경
 
 ```bash
-docker compose up -d --build
-# 백엔드: http://localhost:8000
-# 프론트: cd web && npm run dev (http://localhost:3000)
+docker compose up -d          # 백엔드 (http://localhost:8000)
+cd web && npm run dev          # 프론트 (http://localhost:5000)
 ```
 
-동선:
-1. `/` 대시보드 — WatchCard, 스파크라인
-2. `/watches/new` — 3스텝 위저드로 감시 등록
-3. `/watches/<id>` — 차트, 오퍼, 히트맵, RunLog
-4. `/alerts` — 알림 목록, 읽음 처리
-5. `/settings` — 슬랙 테스트 발송
+`web/.env.local` 필수:
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_TOKEN=<APP_API_TOKEN 값>
+API_BASE_URL=http://localhost:8000
+```
+
+`backend/.env`: `PUBLIC_WEB_URL=http://localhost:5000`
+
+### E2E 검증 현황 (2026-09-07)
+
+- [x] 슬랙 Webhook 설정 + 테스트 발송 성공
+- [x] 감시 등록 (`/watches/new` → 3스텝 위저드 → DB 저장)
+- [x] 감시 상세 리다이렉트 정상
+- [ ] 오퍼 목록 (백엔드 `/offers` 엔드포인트 없음)
+- [ ] 가격 차트 데이터 쌓임 확인 (수집 1회 이상 필요)
+- [ ] 알림 수신 + 읽음 처리
+- [ ] `/settings` 워커 상태 표시 (web/.env.local에 API_BASE_URL 추가 후 확인)
+
+### 스키마 불일치 수정 내역 (2026-09-07, 커밋 c1ecb13)
+
+프론트-백엔드 필드명 불일치로 인한 422 오류 수정 완료:
+- `name/type/query/interval_hours` → `title/kind/params/interval_min`
+- `ThresholdRule.threshold` → `ThresholdRule.price_krw`
+- `weekdays: number[]` → `.map(String)` 변환
+- `duration_ms` 미존재 필드 → `finished_at - started_at` 계산으로 대체
+- `WatchType` → `WatchKind` import 수정
 
 **계획 5 완료 현황 (2026-09-04):**
 - T1: TanStack Query + apiFetch + Nav + WorkerDot + format 유틸

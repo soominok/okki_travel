@@ -123,8 +123,14 @@ async def test_mark_read_success_and_idempotent(client):
 
 
 @pytest.mark.asyncio
-async def test_notify_test_without_webhook_returns_422(client):
-    # SLACK_WEBHOOK_URL이 설정되지 않은 테스트 환경에서 422 반환
+async def test_notify_test_without_webhook_returns_422(client, monkeypatch):
+    # webhook URL이 없는 환경을 명시적으로 모킹해서 환경 변수에 무관하게 동작
+    import app.api.routes.alerts as alerts_module
+    from app.config import Settings
+
+    no_webhook = Settings(app_api_token="x" * 32, slack_webhook_url=None)
+    monkeypatch.setattr(alerts_module, "get_settings", lambda: no_webhook)
+
     r = await client.post("/api/notify/test", headers=_auth())
     assert r.status_code == 422
 
