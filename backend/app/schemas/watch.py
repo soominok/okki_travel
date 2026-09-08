@@ -5,7 +5,7 @@ params 는 kind 에 따라 완전히 다른 필드를 가지므로 discriminated
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -174,7 +174,9 @@ class OfferOut(BaseModel):
     price_original: Decimal | None = None
     currency: str | None = Field(None, validation_alias="currency_original")
     depart_date: date | None = None
+    depart_time: time | None = None
     return_date: date | None = None
+    return_time: time | None = None
     airline: str | None = Field(None, validation_alias="carrier")
     deep_link: str | None = None
     freshness: str

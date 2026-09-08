@@ -20,6 +20,33 @@ from app.sources.registry import SourceRegistry
 
 log = structlog.get_logger()
 
+_KO_WEEKDAY = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def _flight_no(offer) -> str | None:
+    """raw JSONB에서 항공편명을 추출한다.
+
+    Travelpayouts grouped_prices는 flight_number가 숫자만("271")이고 airline이 별도.
+    prices_for_dates는 airline 포함된 경우가 많다("ZE201").
+    외부 키인 external_id는 dedup용이므로 표시에 쓰지 않는다.
+    """
+    raw = getattr(offer, "raw", None) or {}
+    fn = raw.get("flight_number") or ""
+    if not fn:
+        return None
+    # 항공사 코드가 이미 포함돼 있으면 그대로, 없으면 carrier 앞에 붙인다
+    carrier = getattr(offer, "carrier", None) or ""
+    if carrier and not fn.upper().startswith(carrier.upper()):
+        return f"{carrier}{fn}"
+    return fn
+
+
+def _fmt_date_ko(d: date, t=None) -> str:
+    base = f"{d} ({_KO_WEEKDAY[d.weekday()]})"
+    if t is not None:
+        return f"{base} {t.strftime('%H:%M')}"
+    return base
+
 
 def _monthly_chunks(depart_from: date, depart_to: date) -> list[tuple[date, date]]:
     """날짜 범위를 같은-달 청크로 분할.
@@ -253,7 +280,9 @@ async def collect_watch(
                 else None,
                 currency_original=o.currency_original,
                 depart_date=o.depart_date,
+                depart_time=getattr(o, "depart_time", None),
                 return_date=o.return_date,
+                return_time=getattr(o, "return_time", None),
                 carrier=o.carrier,
                 deep_link=o.deep_link,
                 raw=o.raw,
@@ -353,10 +382,44 @@ async def collect_watch(
                     summary=candidate.body,
                     fields=[
                         Field(label="최저가", value=f"{candidate.best_price_krw:,}원"),
-                        *([Field(label="출발일", value=str(depart_dt))] if depart_dt else []),
+                        *(
+                            [Field(
+                                label="출발일",
+                                value=_fmt_date_ko(
+                                    depart_dt,
+                                    getattr(best_offer_obj, "depart_time", None),
+                                ),
+                            )]
+                            if depart_dt
+                            else []
+                        ),
+                        *(
+                            [Field(
+                                label="여정",
+                                value="왕복" if best_offer_obj.return_date else "편도",
+                            )]
+                            if best_offer_obj
+                            else []
+                        ),
+                        *(
+                            [Field(
+                                label="귀국일",
+                                value=_fmt_date_ko(
+                                    best_offer_obj.return_date,
+                                    getattr(best_offer_obj, "return_time", None),
+                                ),
+                            )]
+                            if best_offer_obj and best_offer_obj.return_date
+                            else []
+                        ),
                         *(
                             [Field(label="항공사", value=best_offer_obj.carrier)]
                             if best_offer_obj and best_offer_obj.carrier
+                            else []
+                        ),
+                        *(
+                            [Field(label="편명", value=_flight_no(best_offer_obj))]
+                            if best_offer_obj and _flight_no(best_offer_obj)
                             else []
                         ),
                     ],

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
@@ -45,7 +46,9 @@ class Offer(Base):
     currency_original: Mapped[str | None] = mapped_column(Text)
 
     depart_date: Mapped[date | None] = mapped_column(Date)
+    depart_time: Mapped[time | None] = mapped_column(Time(timezone=False))
     return_date: Mapped[date | None] = mapped_column(Date)
+    return_time: Mapped[time | None] = mapped_column(Time(timezone=False))
     carrier: Mapped[str | None] = mapped_column(Text)
     deep_link: Mapped[str | None] = mapped_column(Text)
     raw: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

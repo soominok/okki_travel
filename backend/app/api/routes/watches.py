@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_token
@@ -130,14 +130,31 @@ async def get_snapshots(
 @router.get("/{watch_id}/offers", response_model=list[OfferOut], dependencies=[_auth])
 async def get_offers(
     watch_id: uuid.UUID,
-    limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
+    # (source, external_id) 기준 가장 최근 수집된 것 하나씩만 반환
+    latest_subq = (
+        select(
+            Offer.source,
+            Offer.external_id,
+            func.max(Offer.collected_at).label("max_at"),
+        )
+        .where(Offer.watch_id == watch_id)
+        .group_by(Offer.source, Offer.external_id)
+        .subquery()
+    )
     result = await db.execute(
         select(Offer)
-        .where(Offer.watch_id == watch_id)
-        .order_by(desc(Offer.collected_at))
-        .limit(limit)
+        .join(
+            latest_subq,
+            and_(
+                Offer.source == latest_subq.c.source,
+                Offer.external_id == latest_subq.c.external_id,
+                Offer.collected_at == latest_subq.c.max_at,
+                Offer.watch_id == watch_id,
+            ),
+        )
+        .order_by(Offer.price_krw)
     )
     return result.scalars().all()
 

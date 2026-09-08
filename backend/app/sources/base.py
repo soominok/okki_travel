@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
@@ -43,7 +43,9 @@ class Offer(BaseModel):
     price_original: float
     currency_original: str
     depart_date: date | None = None
+    depart_time: time | None = None
     return_date: date | None = None
+    return_time: time | None = None
     carrier: str | None = None
     deep_link: str | None = None
     raw: dict = {}

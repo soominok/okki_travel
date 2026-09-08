@@ -1,26 +1,21 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-07 (E2E 검증 중, 스키마 불일치 수정 완료)
+> 마지막 갱신: 2026-09-08 (알림 내용 보강, depart_time/return_time 저장, 예약 링크 추가, 상세 페이지 캐시 버그 수정)
 
 ---
 
 ## 한눈에
 
 ```
-단계       Phase 1 완료. PR 생성됨 (feat/plan2-source-layer → master)
+단계       Phase 1 완료. PR 머지됨 (feat/plan2-source-layer → master)
 코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
-브랜치     feat/plan2-source-layer (HEAD ea532aa) — PR 오픈 중
+브랜치     master
 블로커     없음
-다음 할 일 PR 머지 → Phase 2 설계 시작
+다음 할 일 데이터 누적 후 Phase 2 설계 시작
 ```
 
 ## 지금 당장 할 일
-
-### 미구현 엔드포인트 추가
-
-`GET /api/watches/{id}/offers` — 백엔드에 없음. 프론트 상세 페이지가 404로 빈 목록 표시.
-`backend/app/api/routes/watches.py`에 route 추가 필요 (Plan 3 T3에서 누락).
 
 ### 로컬 개발 환경
 
@@ -119,7 +114,11 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 - [x] **계획 5 실행** — 완료 (2026-09-04, 커밋 `2ca6a6e`). 5화면 구현
 - [x] **E2E 검증** — 완료 (2026-09-07). 감시 등록·수집·오퍼 30건·홈 가격 표시 확인
 - [x] **PR 생성** — 완료 (2026-09-07). feat/plan2-source-layer → master
-- [ ] PR 머지
+- [x] **PR 머지** — 완료 (2026-09-07).
+- [x] **슬랙 알림 내용 보강** — 완료 (2026-09-07). 출발일 요일, 편도/왕복, 귀국일, 편명 추가
+- [x] **depart_time/return_time 저장** — 완료 (2026-09-07). alembic migration a1c3e5f7b9d2
+- [x] **예약 링크 절대 URL 변환** — 완료 (2026-09-07). travelpayouts 상대경로→jetradar.com 절대 URL + marker
+- [x] **감시 상세 페이지 404 수정** — 완료 (2026-09-08). Turbopack 캐시 오염 → 컨테이너 재시작으로 해소
 - [ ] Phase 2 설계 시작
 
 **다음은 계획 2(소스 계층)다.** 스파이크(`python spikes/travelpayouts_probe.py`) 결과가 선행 조건이므로,
