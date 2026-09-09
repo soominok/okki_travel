@@ -1,18 +1,18 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-09 (Task 7 리뷰 수정 완료 — Critical 1 + Important 2)
+> 마지막 갱신: 2026-09-09 (Phase 2 B+C+D 최종 리뷰 수정 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       Phase 1 완료. PR 머지됨 (feat/plan2-source-layer → master)
-코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
+단계       Phase 2 B+C+D 완료 (딥링크 + 가격통계 + 이벤트크롤러)
+코드       backend(151 테스트) + web(Next 16, 5화면) · docker compose 4서비스
 브랜치     master
 블로커     없음
-다음 할 일 데이터 누적 후 Phase 2 설계 시작
+다음 할 일 Phase 3 설계 시작 (coverage_pct 계산, is_active 만료 처리)
 ```
 
 ## 지금 당장 할 일
@@ -33,15 +33,20 @@ API_BASE_URL=http://localhost:8000
 
 `backend/.env`: `PUBLIC_WEB_URL=http://localhost:5000`
 
-### E2E 검증 현황 (2026-09-07)
+### E2E 검증 현황 (2026-09-09)
 
 - [x] 슬랙 Webhook 설정 + 테스트 발송 성공
 - [x] 감시 등록 (`/watches/new` → 3스텝 위저드 → DB 저장)
 - [x] 감시 상세 리다이렉트 정상
+- [x] 슬랙 딥링크 버튼 배선 완료 (collector.py → NotificationMessage.deep_links)
+- [x] event_tick 슬랙 알림 연결 (신규 이벤트 최대 10건)
+- [x] `/api/events` 엔드포인트 테스트 추가 (151 테스트)
 - [ ] 오퍼 목록 (백엔드 `/offers` 엔드포인트 없음)
 - [ ] 가격 차트 데이터 쌓임 확인 (수집 1회 이상 필요)
 - [ ] 알림 수신 + 읽음 처리
 - [ ] `/settings` 워커 상태 표시 (web/.env.local에 API_BASE_URL 추가 후 확인)
+- [ ] coverage_pct 계산 구현 (현재 항상 None)
+- [ ] is_active 만료 처리 잡 구현 (valid_to < today)
 
 ### 스키마 불일치 수정 내역 (2026-09-07, 커밋 c1ecb13)
 
