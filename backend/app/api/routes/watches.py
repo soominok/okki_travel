@@ -217,7 +217,7 @@ async def get_stats(
     result = await db.execute(
         text("""
             SELECT
-                to_char(date_trunc('month', captured_at), 'YYYY-MM') AS month,
+                to_char(date_trunc('month', captured_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
                 MIN(min_price_krw) AS min_krw
             FROM price_snapshots
             WHERE watch_id = :watch_id

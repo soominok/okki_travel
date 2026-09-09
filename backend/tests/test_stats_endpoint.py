@@ -99,4 +99,15 @@ async def test_stats_monthly_aggregation(client):
     assert data["monthly_min"][0]["month"] == "2026-08"
     assert data["monthly_min"][0]["min_krw"] == 300_000
     assert data["overall_min"] == 300_000
+    assert data["overall_min_month"] is not None
+    assert data["overall_min_month"] == "2026-08"
     assert data["data_months"] == 1
+
+
+@pytest.mark.asyncio
+async def test_stats_returns_404_for_unknown_watch(client):
+    resp = await client.get(
+        "/api/watches/00000000-0000-0000-0000-000000000000/stats",
+        headers=_auth(),
+    )
+    assert resp.status_code == 404

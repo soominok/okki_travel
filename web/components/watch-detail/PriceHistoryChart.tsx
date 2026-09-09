@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function PriceHistoryChart({ stats }: Props) {
-  if (stats.data_months < 1) {
+  if (stats.data_months < 3) {
     return (
       <p className="text-sm text-gray-500">
         최저가 패턴 분석 중 — 데이터가 더 쌓이면 표시됩니다.
