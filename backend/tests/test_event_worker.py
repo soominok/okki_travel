@@ -109,3 +109,50 @@ async def test_event_tick_skips_when_crawl_disabled(db_session: AsyncSession):
     ):
         await event_tick()
         mock_adapters.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_event_tick_continues_on_adapter_error(db_session: AsyncSession):
+    """어댑터 하나가 실패해도 나머지가 실행된다."""
+    from app.worker import event_tick
+
+    # 첫 번째 어댑터는 예외 발생
+    failing = AsyncMock()
+    failing.fetch_events = AsyncMock(side_effect=Exception("parse error"))
+    failing.source = "airbusan"
+
+    # 두 번째 어댑터는 정상 반환
+    ok_event = AirlineEventData(
+        source="tway",
+        external_id="TW_RESILIENCE_001",
+        title="회복 테스트",
+        url="https://www.twayair.com/app/promotion/event/detail?eventId=TW_RESILIENCE_001",
+        valid_to=date(2026, 12, 31),
+    )
+    working = AsyncMock()
+    working.fetch_events = AsyncMock(return_value=[ok_event])
+    working.source = "tway"
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=db_session)
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.worker.get_settings", return_value=_mock_settings()),
+        patch("app.worker.build_event_adapters", return_value=[failing, working]),
+        patch("app.worker.SessionLocal", return_value=mock_session_ctx),
+    ):
+        await event_tick()
+
+    # working 어댑터의 이벤트는 저장됐어야 함
+    from sqlalchemy import select
+
+    from app.models.event import AirlineEvent
+
+    result = await db_session.execute(
+        select(AirlineEvent).where(AirlineEvent.external_id == "TW_RESILIENCE_001")
+    )
+    saved = result.scalar_one_or_none()
+    assert saved is not None
+    assert saved.source == "tway"
+    assert saved.title == "회복 테스트"

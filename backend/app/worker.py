@@ -107,32 +107,36 @@ async def event_tick() -> None:
     new_count = 0
 
     for adapter in adapters:
-        events = await adapter.fetch_events()
-        if not events:
-            continue
+        try:
+            events = await adapter.fetch_events()
+            if not events:
+                continue
 
-        async with SessionLocal() as session:
-            for ev in events:
-                stmt = (
-                    pg_insert(AirlineEvent)
-                    .values(
-                        source=ev.source,
-                        external_id=ev.external_id,
-                        title=ev.title,
-                        url=ev.url,
-                        origin=ev.origin,
-                        destination=ev.destination,
-                        valid_from=ev.valid_from,
-                        valid_to=ev.valid_to,
-                        discount_info=ev.discount_info,
-                        is_active=True,
+            async with SessionLocal() as session:
+                for ev in events:
+                    stmt = (
+                        pg_insert(AirlineEvent)
+                        .values(
+                            source=ev.source,
+                            external_id=ev.external_id,
+                            title=ev.title,
+                            url=ev.url,
+                            origin=ev.origin,
+                            destination=ev.destination,
+                            valid_from=ev.valid_from,
+                            valid_to=ev.valid_to,
+                            discount_info=ev.discount_info,
+                            is_active=True,
+                        )
+                        .on_conflict_do_nothing(constraint="uq_airline_events_source_ext")
                     )
-                    .on_conflict_do_nothing(constraint="uq_airline_events_source_ext")
-                )
-                result = await session.execute(stmt)
-                if result.rowcount:
-                    new_count += 1
-            await session.commit()
+                    result = await session.execute(stmt)
+                    if result.rowcount:
+                        new_count += 1
+                await session.commit()
+        except Exception:  # noqa: BLE001
+            log.exception("event_tick.adapter_error", source=adapter.source)
+            continue
 
     log.info("worker.event_tick.done", new_events=new_count)
 

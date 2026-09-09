@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +18,7 @@ _auth = Depends(require_token)
 async def list_events(
     source: str | None = None,
     active_only: bool = True,
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(AirlineEvent).order_by(desc(AirlineEvent.fetched_at)).limit(limit)
