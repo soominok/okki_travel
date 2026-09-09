@@ -182,3 +182,15 @@ class OfferOut(BaseModel):
     deep_links: dict[str, str] | None = None
     freshness: str
     collected_at: datetime
+
+
+class MonthlyMin(BaseModel):
+    month: str    # "2026-07"
+    min_krw: int
+
+
+class WatchStats(BaseModel):
+    monthly_min: list[MonthlyMin]
+    overall_min: int | None
+    overall_min_month: str | None
+    data_months: int

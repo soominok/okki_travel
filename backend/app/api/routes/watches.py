@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_token
@@ -15,7 +15,16 @@ from app.db import SessionLocal
 from app.engine.collector import collect_watch
 from app.models.price import Offer, PriceSnapshot
 from app.models.watch import Watch, WatchRun
-from app.schemas.watch import OfferOut, RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
+from app.schemas.watch import (
+    MonthlyMin,
+    OfferOut,
+    RunOut,
+    SnapshotOut,
+    WatchCreate,
+    WatchPatch,
+    WatchRead,
+    WatchStats,
+)
 from app.sources.registry import build_registry
 from app.utils.deep_links import build_deep_links
 
@@ -194,3 +203,43 @@ async def get_runs(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+@router.get("/{watch_id}/stats", response_model=WatchStats, dependencies=[_auth])
+async def get_stats(
+    watch_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    watch = await db.get(Watch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+
+    result = await db.execute(
+        text("""
+            SELECT
+                to_char(date_trunc('month', captured_at), 'YYYY-MM') AS month,
+                MIN(min_price_krw) AS min_krw
+            FROM price_snapshots
+            WHERE watch_id = :watch_id
+            GROUP BY 1
+            ORDER BY 1
+        """),
+        {"watch_id": str(watch_id)},
+    )
+    rows = result.fetchall()
+
+    monthly = [MonthlyMin(month=r[0], min_krw=r[1]) for r in rows]
+    if monthly:
+        best = min(monthly, key=lambda x: x.min_krw)
+        overall_min: int | None = best.min_krw
+        overall_min_month: str | None = best.month
+    else:
+        overall_min = None
+        overall_min_month = None
+
+    return WatchStats(
+        monthly_min=monthly,
+        overall_min=overall_min,
+        overall_min_month=overall_min_month,
+        data_months=len(monthly),
+    )
