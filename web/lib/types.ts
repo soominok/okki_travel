@@ -97,8 +97,11 @@ export interface OfferOut {
   currency: string | null;
   depart_date: string | null;
   return_date: string | null;
+  depart_time: string | null;
+  return_time: string | null;
   airline: string | null;
   deep_link: string | null;
+  deep_links: Record<string, string> | null;
   freshness: Freshness;
   source: string;
   collected_at: string;
