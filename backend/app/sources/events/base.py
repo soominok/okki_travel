@@ -44,7 +44,11 @@ class EventAdapter(ABC):
         """policy.py 게이트 → HTTP → 파싱. 예외는 빈 리스트로 흡수."""
         from urllib.parse import urlparse
 
-        CrawlPolicy.require_enabled()
+        try:
+            CrawlPolicy.require_enabled()
+        except RuntimeError:
+            log.warning("event_adapter.crawl_disabled", source=self.source)
+            return []
         domain = urlparse(self.base_url).netloc
         if not CrawlPolicy.check_allowed(domain):
             log.warning("event_adapter.domain_not_allowed", source=self.source, domain=domain)
