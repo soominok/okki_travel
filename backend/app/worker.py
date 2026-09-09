@@ -7,10 +7,17 @@ import asyncio
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.config import get_settings
 from app.db import SessionLocal
 from app.logging import setup_logging
+from app.models.event import AirlineEvent
+from app.sources.events.airbusan import AirBusanAdapter
+from app.sources.events.flightdeal import FlightDealAdapter
+from app.sources.events.jejuair import JejuAirAdapter
+from app.sources.events.koreanair import KoreanAirAdapter
+from app.sources.events.tway import TwayAdapter
 from app.sources.registry import build_registry
 
 log = structlog.get_logger()
@@ -78,6 +85,58 @@ async def source_health_check() -> None:
     log.info("worker.source_health_check")
 
 
+def build_event_adapters():
+    """이벤트 어댑터 인스턴스 목록을 반환한다. 테스트에서 패치 가능하도록 분리."""
+    return [
+        AirBusanAdapter(),
+        TwayAdapter(),
+        JejuAirAdapter(),
+        KoreanAirAdapter(),
+        FlightDealAdapter(),
+    ]
+
+
+async def event_tick() -> None:
+    """항공사 이벤트 페이지 수집. 6시간마다 실행."""
+    settings = get_settings()
+    if not settings.crawl_enabled:
+        log.info("worker.event_tick.skipped", reason="CRAWL_ENABLED=false")
+        return
+
+    adapters = build_event_adapters()
+    new_count = 0
+
+    for adapter in adapters:
+        events = await adapter.fetch_events()
+        if not events:
+            continue
+
+        async with SessionLocal() as session:
+            for ev in events:
+                stmt = (
+                    pg_insert(AirlineEvent)
+                    .values(
+                        source=ev.source,
+                        external_id=ev.external_id,
+                        title=ev.title,
+                        url=ev.url,
+                        origin=ev.origin,
+                        destination=ev.destination,
+                        valid_from=ev.valid_from,
+                        valid_to=ev.valid_to,
+                        discount_info=ev.discount_info,
+                        is_active=True,
+                    )
+                    .on_conflict_do_nothing(constraint="uq_airline_events_source_ext")
+                )
+                result = await session.execute(stmt)
+                if result.rowcount:
+                    new_count += 1
+            await session.commit()
+
+    log.info("worker.event_tick.done", new_events=new_count)
+
+
 async def main() -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
@@ -87,6 +146,9 @@ async def main() -> None:
     scheduler.add_job(tick, "interval", seconds=60, id="tick", max_instances=1, coalesce=True)
     scheduler.add_job(cleanup_old_offers, "cron", hour=4, minute=0, max_instances=1, id="cleanup")
     scheduler.add_job(source_health_check, "interval", minutes=15, max_instances=1, id="health")
+    scheduler.add_job(
+        event_tick, "interval", hours=6, id="event_tick", max_instances=1, coalesce=True
+    )
     scheduler.start()
 
     try:

@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.api.routes.alerts import notify_router
 from app.api.routes.alerts import router as alerts_router
+from app.api.routes.events import router as events_router
 from app.api.routes.watches import router as watches_router
 from app.config import get_settings
 from app.db import engine
@@ -29,6 +30,7 @@ app = FastAPI(title="TripPick API", version="0.1.0", lifespan=lifespan)
 app.include_router(watches_router)
 app.include_router(alerts_router)
 app.include_router(notify_router)
+app.include_router(events_router)
 
 app.add_middleware(
     CORSMiddleware,
