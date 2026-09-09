@@ -6,6 +6,7 @@ import WorkerDot from './WorkerDot';
 
 const links = [
   { href: '/', label: '대시보드' },
+  { href: '/events', label: '이벤트' },
   { href: '/alerts', label: '알림함' },
   { href: '/settings', label: '설정' },
 ] as const;

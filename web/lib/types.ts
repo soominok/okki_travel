@@ -136,3 +136,20 @@ export interface HealthOut {
   db: string;
   worker?: string;
 }
+
+// ---------- events ----------
+
+export interface EventOut {
+  id: string;
+  source: string;
+  external_id: string;
+  title: string;
+  url: string;
+  origin: string | null;
+  destination: string | null;
+  valid_from: string | null;   // "YYYY-MM-DD"
+  valid_to: string | null;
+  discount_info: string | null;
+  is_active: boolean;
+  fetched_at: string;
+}
