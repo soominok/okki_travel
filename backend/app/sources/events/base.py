@@ -9,6 +9,7 @@ from datetime import date
 
 import structlog
 
+from app.config import get_settings
 from app.sources.http import RateLimitedClient
 from app.sources.policy import CrawlPolicy
 
@@ -38,7 +39,9 @@ class EventAdapter(ABC):
     base_url: str  # 이벤트 목록 URL
 
     def __init__(self, client: RateLimitedClient | None = None) -> None:
-        self._client = client or RateLimitedClient(min_interval_sec=2.0)
+        _s = get_settings()
+        self._client = client or RateLimitedClient(min_interval_sec=_s.crawl_min_interval_sec)
+        self._user_agent = _s.http_user_agent
 
     async def fetch_events(self) -> list[AirlineEventData]:
         """policy.py 게이트 → HTTP → 파싱. 예외는 빈 리스트로 흡수."""
@@ -56,7 +59,7 @@ class EventAdapter(ABC):
         try:
             resp = await self._client.get(
                 self.base_url,
-                headers={"User-Agent": "TripPickBot/1.0 (+https://github.com/soominok/trip_pick)"},
+                headers={"User-Agent": self._user_agent},
             )
             resp.raise_for_status()
             return self._parse_html(resp.text)

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.models.price import Offer as DbOffer
+from app.utils.deep_links import build_deep_links
 from app.models.price import PriceSnapshot
 from app.models.watch import Watch, WatchRun
 from app.sources.base import FetchRequest
@@ -367,6 +368,24 @@ async def collect_watch(
                     if best_offer_obj
                     else "알 수 없음"
                 )
+
+                # B-딥링크: flight 타입 감시이고 best offer에 날짜가 있으면 딥링크 생성
+                _deep_links: dict[str, str] | None = None
+                if (
+                    watch.kind == "flight"
+                    and best_offer_obj is not None
+                    and best_offer_obj.depart_date is not None
+                ):
+                    _params = watch.params  # dict
+                    _deep_links = build_deep_links(
+                        origin=_params.get("origin") or "",
+                        destination=_params.get("destination") or "",
+                        dep_date=str(best_offer_obj.depart_date),
+                        ret_date=str(best_offer_obj.return_date)
+                        if best_offer_obj.return_date
+                        else None,
+                    )
+
                 msg = NotificationMessage(
                     severity=candidate.severity,
                     confidence=Confidence(
@@ -428,6 +447,7 @@ async def collect_watch(
                     link_label="예약 바로가기"
                     if (candidate.deep_link or (best_offer_obj and best_offer_obj.deep_link))
                     else None,
+                    deep_links=_deep_links,
                     dedup_key=key,
                 )
                 try:

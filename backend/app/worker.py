@@ -105,6 +105,7 @@ async def event_tick() -> None:
 
     adapters = build_event_adapters()
     new_count = 0
+    new_events_for_slack: list = []
 
     for adapter in adapters:
         try:
@@ -133,12 +134,37 @@ async def event_tick() -> None:
                     result = await session.execute(stmt)
                     if result.rowcount:
                         new_count += 1
+                        new_events_for_slack.append(ev)
                 await session.commit()
         except Exception:  # noqa: BLE001
             log.exception("event_tick.adapter_error", source=adapter.source)
             continue
 
     log.info("worker.event_tick.done", new_events=new_count)
+
+    # 신규 이벤트가 있으면 슬랙 알림 (per-adapter 순회 후)
+    if new_events_for_slack and settings.slack_webhook_url:
+        from app.notify.base import Confidence, NotificationMessage
+        from app.notify.slack import SlackNotifier
+
+        notifier = SlackNotifier(settings.slack_webhook_url.get_secret_value())
+        for ev in new_events_for_slack[:10]:  # 최대 10건만 알림
+            msg = NotificationMessage(
+                severity="info",
+                confidence=Confidence(
+                    verified=False,
+                    freshness="live",
+                    age_label="방금",
+                    source=ev.source,
+                ),
+                title=f"새 이벤트: [{ev.source}]",
+                summary=ev.title,
+                fields=[],
+                link=ev.url,
+                link_label="이벤트 보기",
+                dedup_key=f"event:{ev.source}:{ev.external_id}",
+            )
+            await notifier.send(msg)
 
 
 async def main() -> None:

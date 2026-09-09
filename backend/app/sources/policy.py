@@ -31,5 +31,5 @@ class CrawlPolicy:
 
     @staticmethod
     def check_allowed(domain: str, path: str = "/") -> bool:
-        """robots.txt: 수동 검증된 이벤트 도메인만 허용."""
+        """하드코딩된 이벤트 도메인 허용목록. robots.txt 실제 확인 미완료 (crawl_enabled=False로 비활성)."""
         return domain in _ALLOWED_EVENT_DOMAINS
