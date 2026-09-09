@@ -25,13 +25,21 @@ def build_deep_links(
         ret_yymmdd = ""
         ret_nodash = ""
 
-    skyscanner = (
-        f"https://www.skyscanner.co.kr/transport/flights/"
-        f"{origin}/{destination}/"
-        f"{dep_yymmdd}/"
-        f"{ret_yymmdd if ret_date else ''}/"
-        f"?adults=1&currency=KRW"
-    )
+    if ret_date:
+        skyscanner = (
+            f"https://www.skyscanner.co.kr/transport/flights/"
+            f"{origin}/{destination}/"
+            f"{dep_yymmdd}/"
+            f"{ret_yymmdd}/"
+            f"?adults=1&currency=KRW"
+        )
+    else:
+        skyscanner = (
+            f"https://www.skyscanner.co.kr/transport/flights/"
+            f"{origin}/{destination}/"
+            f"{dep_yymmdd}/"
+            f"?adults=1&currency=KRW"
+        )
 
     google = (
         f"https://www.google.com/travel/flights/search"

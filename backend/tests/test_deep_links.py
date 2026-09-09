@@ -24,6 +24,9 @@ def test_skyscanner_url_format_oneway():
     # 편도: 귀국 날짜 없이 URL이 만들어져야 함
     assert "skyscanner" in links["skyscanner"]
     assert "NRT" in links["skyscanner"]
+    # 이중 슬래시 없어야 함
+    assert "//" not in links["skyscanner"].replace("https://", "")
+    assert links["skyscanner"].endswith("?adults=1&currency=KRW")
 
 
 def test_naver_oneway_no_return_param():
