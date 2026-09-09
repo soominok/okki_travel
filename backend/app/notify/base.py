@@ -28,6 +28,7 @@ class NotificationMessage(BaseModel):
     fields: list[Field]
     link: str | None = None
     link_label: str | None = None
+    deep_links: dict[str, str] | None = None
     dashboard_url: str | None = None
     dedup_key: str
 

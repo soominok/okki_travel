@@ -52,6 +52,24 @@ def _build_blocks(msg: NotificationMessage) -> list[dict]:
                 ],
             }
         )
+    if msg.deep_links:
+        _LABEL_MAP = {
+            "skyscanner": "스카이스캐너",
+            "google": "구글항공",
+            "naver": "네이버항공",
+            "tripdotcom": "트립닷컴",
+        }
+        elements = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": _LABEL_MAP.get(k, k)},
+                "url": v,
+            }
+            for k, v in msg.deep_links.items()
+            if v
+        ]
+        if elements:
+            blocks.append({"type": "actions", "elements": elements})
     return blocks
 
 

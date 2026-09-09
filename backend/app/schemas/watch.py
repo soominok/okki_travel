@@ -179,5 +179,6 @@ class OfferOut(BaseModel):
     return_time: time | None = None
     airline: str | None = Field(None, validation_alias="carrier")
     deep_link: str | None = None
+    deep_links: dict[str, str] | None = None
     freshness: str
     collected_at: datetime

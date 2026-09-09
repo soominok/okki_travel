@@ -17,6 +17,7 @@ from app.models.price import Offer, PriceSnapshot
 from app.models.watch import Watch, WatchRun
 from app.schemas.watch import OfferOut, RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
 from app.sources.registry import build_registry
+from app.utils.deep_links import build_deep_links
 
 router = APIRouter(prefix="/api/watches", tags=["watches"])
 _auth = Depends(require_token)
@@ -132,6 +133,10 @@ async def get_offers(
     watch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
+    watch = await db.get(Watch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+
     # (source, external_id) 기준 가장 최근 수집된 것 하나씩만 반환
     latest_subq = (
         select(
@@ -156,7 +161,24 @@ async def get_offers(
         )
         .order_by(Offer.price_krw)
     )
-    return result.scalars().all()
+    offers = result.scalars().all()
+
+    # Watch params에서 딥링크 재료 추출 (flight 종류만)
+    params = watch.params
+    origin = params.get("origin") if isinstance(params, dict) else None
+    destination = params.get("destination") if isinstance(params, dict) else None
+    depart_from = params.get("depart_from") if isinstance(params, dict) else None
+
+    out_list: list[OfferOut] = []
+    for offer in offers:
+        out = OfferOut.model_validate(offer)
+        if origin and destination:
+            dep = str(offer.depart_date) if offer.depart_date else depart_from
+            ret = str(offer.return_date) if offer.return_date else None
+            if dep:
+                out.deep_links = build_deep_links(origin, destination, dep, ret)
+        out_list.append(out)
+    return out_list
 
 
 @router.get("/{watch_id}/runs", response_model=list[RunOut], dependencies=[_auth])
