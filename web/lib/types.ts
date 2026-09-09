@@ -153,3 +153,17 @@ export interface EventOut {
   is_active: boolean;
   fetched_at: string;
 }
+
+// ---------- stats ----------
+
+export interface MonthlyMin {
+  month: string;   // "2026-07"
+  min_krw: number;
+}
+
+export interface WatchStats {
+  monthly_min: MonthlyMin[];
+  overall_min: number | null;
+  overall_min_month: string | null;
+  data_months: number;
+}
