@@ -8,8 +8,10 @@ import {
   useWatchOffers,
   useWatchRuns,
   useRunNow,
+  useWatchStats,
 } from '@/hooks/useWatches';
 import PriceChart from '@/components/watch-detail/PriceChart';
+import PriceHistoryChart from '@/components/watch-detail/PriceHistoryChart';
 import OfferList from '@/components/watch-detail/OfferList';
 import CoverageHeatmap from '@/components/watch-detail/CoverageHeatmap';
 import RunLog from '@/components/watch-detail/RunLog';
@@ -25,6 +27,7 @@ export default function WatchDetailPage({
   const { data: snapshots = [] } = useWatchSnapshots(id);
   const { data: offers = [] } = useWatchOffers(id);
   const { data: runs = [] } = useWatchRuns(id);
+  const { data: stats } = useWatchStats(id);
   const runNow = useRunNow(id);
 
   if (isLoading) {
@@ -100,6 +103,14 @@ export default function WatchDetailPage({
           <PriceChart snapshots={snapshots} targetPrice={targetPrice} />
         )}
       </section>
+
+      {/* 월별 최저가 히스토리 */}
+      {stats && (
+        <section>
+          <h2 className="text-sm font-semibold mb-3">월별 최저가 패턴</h2>
+          <PriceHistoryChart stats={stats} />
+        </section>
+      )}
 
       {/* 오퍼 목록 */}
       <section>

@@ -32,7 +32,8 @@ def build_registry(settings) -> SourceRegistry:
 
     if settings.travelpayouts_token:
         tp_token = settings.travelpayouts_token.get_secret_value()
-        registry.register(TravelpayoutsAdapter(token=tp_token, client=client))
+        tp_marker = settings.travelpayouts_marker.get_secret_value() if settings.travelpayouts_marker else None
+        registry.register(TravelpayoutsAdapter(token=tp_token, client=client, marker=tp_marker))
         registry.register(HotellookAdapter(token=tp_token, client=client))
 
     if settings.brightdata_api_key:

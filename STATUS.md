@@ -1,26 +1,21 @@
 # 현재 상태
 
 > **프로젝트를 다시 시작한다면 이 파일부터 읽는다.**
-> 마지막 갱신: 2026-09-07 (E2E 검증 중, 스키마 불일치 수정 완료)
+> 마지막 갱신: 2026-09-09 (Phase 2 B+C+D 최종 리뷰 수정 완료)
 
 ---
 
 ## 한눈에
 
 ```
-단계       Phase 1 완료·머지. Phase 2 설계 시작 전
-코드       backend(148 테스트) + web(Next 16, 5화면) · docker compose 4서비스
-브랜치     master (Phase 1 전체 머지 완료, 2026-09-07)
+단계       Phase 2 B+C+D 완료 (딥링크 + 가격통계 + 이벤트크롤러)
+코드       backend(183 테스트) + web(Next 16, 5화면) · docker compose 4서비스
+브랜치     feat/plan2-bcd (PR 오픈 중)
 블로커     없음
-다음 할 일 docs/05-ROADMAP.md 확인 → Phase 2 브레인스토밍 → 새 브랜치 생성
+다음 할 일 Phase 3 설계 시작 (coverage_pct 계산, is_active 만료 처리)
 ```
 
 ## 지금 당장 할 일
-
-### 미구현 엔드포인트 추가
-
-`GET /api/watches/{id}/offers` — 백엔드에 없음. 프론트 상세 페이지가 404로 빈 목록 표시.
-`backend/app/api/routes/watches.py`에 route 추가 필요 (Plan 3 T3에서 누락).
 
 ### 로컬 개발 환경
 
@@ -38,15 +33,20 @@ API_BASE_URL=http://localhost:8000
 
 `backend/.env`: `PUBLIC_WEB_URL=http://localhost:5000`
 
-### E2E 검증 현황 (2026-09-07)
+### E2E 검증 현황 (2026-09-09)
 
 - [x] 슬랙 Webhook 설정 + 테스트 발송 성공
 - [x] 감시 등록 (`/watches/new` → 3스텝 위저드 → DB 저장)
 - [x] 감시 상세 리다이렉트 정상
+- [x] 슬랙 딥링크 버튼 배선 완료 (collector.py → NotificationMessage.deep_links)
+- [x] event_tick 슬랙 알림 연결 (신규 이벤트 최대 10건)
+- [x] `/api/events` 엔드포인트 테스트 추가 (151 테스트)
 - [ ] 오퍼 목록 (백엔드 `/offers` 엔드포인트 없음)
 - [ ] 가격 차트 데이터 쌓임 확인 (수집 1회 이상 필요)
 - [ ] 알림 수신 + 읽음 처리
 - [ ] `/settings` 워커 상태 표시 (web/.env.local에 API_BASE_URL 추가 후 확인)
+- [ ] coverage_pct 계산 구현 (현재 항상 None)
+- [ ] is_active 만료 처리 잡 구현 (valid_to < today)
 
 ### 스키마 불일치 수정 내역 (2026-09-07, 커밋 c1ecb13)
 
@@ -119,6 +119,11 @@ Phase 1을 계획 5개로 쪼갰다. 각 계획은 **그 자체로 동작하는 
 - [x] **계획 5 실행** — 완료 (2026-09-04, 커밋 `2ca6a6e`). 5화면 구현
 - [x] **E2E 검증** — 완료 (2026-09-07). 감시 등록·수집·오퍼 30건·홈 가격 표시 확인
 - [x] **PR 생성·머지** — 완료 (2026-09-07). feat/plan2-source-layer → master
+- [x] **슬랙 알림 내용 보강** — 완료 (2026-09-07). 출발일 요일, 편도/왕복, 귀국일, 편명 추가
+- [x] **depart_time/return_time 저장** — 완료 (2026-09-07). alembic migration a1c3e5f7b9d2
+- [x] **예약 링크 절대 URL 변환** — 완료 (2026-09-07). travelpayouts 상대경로→jetradar.com 절대 URL + marker
+- [x] **감시 상세 페이지 404 수정** — 완료 (2026-09-08). Turbopack 캐시 오염 → 컨테이너 재시작으로 해소
+- [x] **Phase 2 B+C+D 완료** — 완료 (2026-09-09). 딥링크 + 가격통계 + 이벤트 크롤러 (183 테스트)
 - [ ] Phase 2 설계 시작
 
 **다음은 계획 2(소스 계층)다.** 스파이크(`python spikes/travelpayouts_probe.py`) 결과가 선행 조건이므로,

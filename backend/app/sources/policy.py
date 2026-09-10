@@ -2,6 +2,16 @@ from __future__ import annotations
 
 from app.config import get_settings
 
+_ALLOWED_EVENT_DOMAINS = frozenset(
+    {
+        "www.airbusan.com",
+        "www.twayair.com",
+        "www.jejuair.net",
+        "www.koreanair.com",
+        "flightdeal.kr",
+    }
+)
+
 
 class CrawlPolicy:
     """크롤러 활성화 게이트.
@@ -21,5 +31,5 @@ class CrawlPolicy:
 
     @staticmethod
     def check_allowed(domain: str, path: str = "/") -> bool:
-        """robots.txt 파싱은 Plan 4+에서 구현. 지금은 항상 False."""
-        return False
+        """하드코딩된 이벤트 도메인 허용목록. robots.txt 실제 확인 미완료 (crawl_enabled=False로 비활성)."""
+        return domain in _ALLOWED_EVENT_DOMAINS

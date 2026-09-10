@@ -95,6 +95,28 @@ export default function OfferList({ offers }: OfferListProps) {
                 {offer.source}
               </span>
             </div>
+            {offer.deep_links && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {[
+                  { key: 'skyscanner', label: '스카이스캐너' },
+                  { key: 'google', label: '구글항공' },
+                  { key: 'naver', label: '네이버항공' },
+                  { key: 'tripdotcom', label: '트립닷컴' },
+                ].map(({ key, label }) =>
+                  offer.deep_links?.[key] ? (
+                    <a
+                      key={key}
+                      href={offer.deep_links[key]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs border rounded px-2 py-1 text-gray-600 hover:bg-gray-50"
+                    >
+                      {label}에서 검색
+                    </a>
+                  ) : null
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

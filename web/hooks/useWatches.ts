@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/client';
-import type { WatchOut, WatchCreate, PriceSnapshotOut, OfferOut, WorkerRunOut } from '@/lib/types';
+import type { WatchOut, WatchCreate, PriceSnapshotOut, OfferOut, WorkerRunOut, WatchStats } from '@/lib/types';
 
 export function useWatches() {
   return useQuery<WatchOut[]>({
@@ -77,5 +77,13 @@ export function useWatchRuns(id: string) {
     queryKey: ['watches', id, 'runs'],
     queryFn: () => apiFetch<WorkerRunOut[]>(`/api/watches/${id}/runs`),
     staleTime: 60_000,
+  });
+}
+
+export function useWatchStats(id: string) {
+  return useQuery<WatchStats>({
+    queryKey: ['watches', id, 'stats'],
+    queryFn: () => apiFetch<WatchStats>(`/api/watches/${id}/stats`),
+    staleTime: 10 * 60_000,
   });
 }

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.models.price import Offer as DbOffer
+from app.utils.deep_links import build_deep_links
 from app.models.price import PriceSnapshot
 from app.models.watch import Watch, WatchRun
 from app.sources.base import FetchRequest
@@ -19,6 +20,33 @@ from app.sources.budget import ensure_budget_row, reserve_sample, reserve_verify
 from app.sources.registry import SourceRegistry
 
 log = structlog.get_logger()
+
+_KO_WEEKDAY = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def _flight_no(offer) -> str | None:
+    """raw JSONB에서 항공편명을 추출한다.
+
+    Travelpayouts grouped_prices는 flight_number가 숫자만("271")이고 airline이 별도.
+    prices_for_dates는 airline 포함된 경우가 많다("ZE201").
+    외부 키인 external_id는 dedup용이므로 표시에 쓰지 않는다.
+    """
+    raw = getattr(offer, "raw", None) or {}
+    fn = raw.get("flight_number") or ""
+    if not fn:
+        return None
+    # 항공사 코드가 이미 포함돼 있으면 그대로, 없으면 carrier 앞에 붙인다
+    carrier = getattr(offer, "carrier", None) or ""
+    if carrier and not fn.upper().startswith(carrier.upper()):
+        return f"{carrier}{fn}"
+    return fn
+
+
+def _fmt_date_ko(d: date, t=None) -> str:
+    base = f"{d} ({_KO_WEEKDAY[d.weekday()]})"
+    if t is not None:
+        return f"{base} {t.strftime('%H:%M')}"
+    return base
 
 
 def _monthly_chunks(depart_from: date, depart_to: date) -> list[tuple[date, date]]:
@@ -253,7 +281,9 @@ async def collect_watch(
                 else None,
                 currency_original=o.currency_original,
                 depart_date=o.depart_date,
+                depart_time=getattr(o, "depart_time", None),
                 return_date=o.return_date,
+                return_time=getattr(o, "return_time", None),
                 carrier=o.carrier,
                 deep_link=o.deep_link,
                 raw=o.raw,
@@ -338,6 +368,24 @@ async def collect_watch(
                     if best_offer_obj
                     else "알 수 없음"
                 )
+
+                # B-딥링크: flight 타입 감시이고 best offer에 날짜가 있으면 딥링크 생성
+                _deep_links: dict[str, str] | None = None
+                if (
+                    watch.kind == "flight"
+                    and best_offer_obj is not None
+                    and best_offer_obj.depart_date is not None
+                ):
+                    _params = watch.params  # dict
+                    _deep_links = build_deep_links(
+                        origin=_params.get("origin") or "",
+                        destination=_params.get("destination") or "",
+                        dep_date=str(best_offer_obj.depart_date),
+                        ret_date=str(best_offer_obj.return_date)
+                        if best_offer_obj.return_date
+                        else None,
+                    )
+
                 msg = NotificationMessage(
                     severity=candidate.severity,
                     confidence=Confidence(
@@ -353,10 +401,44 @@ async def collect_watch(
                     summary=candidate.body,
                     fields=[
                         Field(label="최저가", value=f"{candidate.best_price_krw:,}원"),
-                        *([Field(label="출발일", value=str(depart_dt))] if depart_dt else []),
+                        *(
+                            [Field(
+                                label="출발일",
+                                value=_fmt_date_ko(
+                                    depart_dt,
+                                    getattr(best_offer_obj, "depart_time", None),
+                                ),
+                            )]
+                            if depart_dt
+                            else []
+                        ),
+                        *(
+                            [Field(
+                                label="여정",
+                                value="왕복" if best_offer_obj.return_date else "편도",
+                            )]
+                            if best_offer_obj
+                            else []
+                        ),
+                        *(
+                            [Field(
+                                label="귀국일",
+                                value=_fmt_date_ko(
+                                    best_offer_obj.return_date,
+                                    getattr(best_offer_obj, "return_time", None),
+                                ),
+                            )]
+                            if best_offer_obj and best_offer_obj.return_date
+                            else []
+                        ),
                         *(
                             [Field(label="항공사", value=best_offer_obj.carrier)]
                             if best_offer_obj and best_offer_obj.carrier
+                            else []
+                        ),
+                        *(
+                            [Field(label="편명", value=_flight_no(best_offer_obj))]
+                            if best_offer_obj and _flight_no(best_offer_obj)
                             else []
                         ),
                     ],
@@ -365,6 +447,7 @@ async def collect_watch(
                     link_label="예약 바로가기"
                     if (candidate.deep_link or (best_offer_obj and best_offer_obj.deep_link))
                     else None,
+                    deep_links=_deep_links,
                     dedup_key=key,
                 )
                 try:

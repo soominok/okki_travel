@@ -7,6 +7,42 @@
 
 ---
 
+## I-014 · is_active — 이벤트 만료 처리 로직 없음
+
+- **날짜** 2026-09-09
+- **증상** `valid_to < today`인 이벤트가 DB에 `is_active=True`로 계속 남는다. `/api/events?active_only=true` 호출 시 만료된 이벤트가 반환될 수 있다
+- **원인** `event_tick()`은 신규 이벤트를 INSERT하지만, 기존 이벤트의 `is_active`를 `valid_to` 기준으로 갱신하는 로직이 없다
+- **해결** 미구현 상태. `cleanup_old_offers()`와 유사한 주기 잡으로 `UPDATE airline_events SET is_active=false WHERE valid_to < now()` 처리가 필요
+- **교훈**
+  1. INSERT-only 로직은 만료 처리를 별도 잡으로 분리해야 한다. event_tick이 6시간마다 실행되므로, 만료 잡은 하루 1회 새벽에 돌리면 충분
+  2. `is_active` 같은 derived field는 DB 트리거 또는 스케줄 잡으로 자동 갱신이 없으면 stale 상태가 된다
+
+---
+
+## I-013 · coverage_pct — 월별 통계가 coverage를 고려하지 않음
+
+- **날짜** 2026-09-09
+- **증상** `PriceSnapshot.coverage_pct`가 항상 `None`으로 저장된다. 최저가 하락이 실제 coverage 하락 때문인지 구별 불가
+- **원인** `collector.py` Step 7에서 `coverage_pct=None` (Plan 4에서 채움이라는 주석)이지만 Phase 2 B+C+D에서도 채워지지 않았다. CLAUDE.md "자주 하는 실수" 항목에 해당
+- **해결** 미구현. `offer_count / 기간내_총_날짜수` 또는 SCAN 어댑터가 반환한 날짜 커버리지로 계산 후 저장해야 함
+- **교훈**
+  1. "Plan N에서 채움" 주석은 기술 부채 표시다. coverage 없이 최저가만 보면 가격 상승 오독이 발생한다 (CLAUDE.md 동일 경고)
+  2. Phase 3 이전에 `coverage_pct` 계산 로직을 추가하지 않으면 규칙 엔진과 차트가 모두 오독한다
+
+---
+
+## I-012 · D 파서 fixture — 창작 HTML, 실제 사이트 미확인
+
+- **날짜** 2026-09-09
+- **증상** Phase 2 D(이벤트 크롤러) 어댑터 테스트에 사용된 HTML fixture가 실제 항공사 페이지에서 가져온 것이 아니라 추정으로 작성됐다
+- **원인** `crawl_enabled=False`가 기본값이라 실제 크롤이 실행되지 않으며, 테스트 fixture도 실제 HTML이 아닌 구조적으로 그럴듯한 가짜 HTML로 작성됐다. CLAUDE.md 13번 규칙(외부 서비스 실제 확인) 위반
+- **해결** 현재 `crawl_enabled=False`이므로 프로덕션 영향 없음. 실제 적용 전 각 항공사 사이트 HTML 구조를 직접 확인하고 fixture를 교체해야 한다
+- **교훈**
+  1. `crawl_enabled=False`가 보호막이지만 영원한 면죄부가 아니다. 크롤 활성화 전에 반드시 실제 HTML로 파서를 검증해야 한다
+  2. fixture는 "실제 응답을 한 번 저장해두고 목킹"이 원칙이다 (CLAUDE.md). 창작 fixture는 파서 버그를 잡지 못한다
+
+---
+
 ## I-007 · 컨테이너 안에서 pytest 를 돌리면 39개 전부 실패한다 (오탐)
 
 - **날짜** 2026-09-02

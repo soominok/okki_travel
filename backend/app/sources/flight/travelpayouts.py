@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING
 
 from app.sources.base import FetchRequest, Offer, SourceCapability, SourceResult
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 _BASE = "https://api.travelpayouts.com"
 _GROUPED = f"{_BASE}/aviasales/v3/grouped_prices"
 _PRICES = f"{_BASE}/aviasales/v3/prices_for_dates"
+_LINK_BASE = "https://jetradar.com"  # Travelpayouts 링크의 기본 도메인
 
 
 def _parse_dt(v: str | None) -> date | None:
@@ -18,6 +19,30 @@ def _parse_dt(v: str | None) -> date | None:
         return None
     try:
         return datetime.fromisoformat(v.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _abs_link(link: str | None, marker: str | None = None) -> str | None:
+    """상대 경로 링크를 절대 URL로 변환하고 마커가 없으면 추가한다."""
+    if not link:
+        return None
+    url = link if link.startswith("http") else _LINK_BASE + link
+    if marker and "marker=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}marker={marker}"
+    return url
+
+
+def _parse_time(v: str | None) -> time | None:
+    """ISO 문자열에서 시각 부분만 추출. 날짜만 있으면 None."""
+    if not v:
+        return None
+    try:
+        dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        t = dt.time()
+        # 시각 정보가 없는 경우(00:00:00)는 구분 불가이므로 그대로 반환
+        return t.replace(tzinfo=None)
     except ValueError:
         return None
 
@@ -44,9 +69,11 @@ def _in_range(dep: date | None, ret: date | None, req: FetchRequest) -> bool:
     return True
 
 
-def _grouped_to_offer(key: str, item: dict, currency: str) -> Offer | None:
-    dep = _parse_dt(item.get("departure_at") or key)
-    ret = _parse_dt(item.get("return_at"))
+def _grouped_to_offer(key: str, item: dict, currency: str, marker: str | None = None) -> Offer | None:
+    dep_str = item.get("departure_at") or key
+    ret_str = item.get("return_at")
+    dep = _parse_dt(dep_str)
+    ret = _parse_dt(ret_str)
     price = item.get("price")
     if price is None:
         return None
@@ -66,9 +93,11 @@ def _grouped_to_offer(key: str, item: dict, currency: str) -> Offer | None:
         price_original=float(price),
         currency_original=currency,
         depart_date=dep,
+        depart_time=_parse_time(dep_str),
         return_date=ret,
+        return_time=_parse_time(ret_str),
         carrier=airline or None,
-        deep_link=item.get("link"),
+        deep_link=_abs_link(item.get("link"), marker),
         raw=item,
         collected_at=datetime.now(tz=UTC),
         freshness="cached",
@@ -77,9 +106,11 @@ def _grouped_to_offer(key: str, item: dict, currency: str) -> Offer | None:
     )
 
 
-def _prices_to_offer(item: dict, currency: str) -> Offer | None:
-    dep = _parse_dt(item.get("departure_at"))
-    ret = _parse_dt(item.get("return_at"))
+def _prices_to_offer(item: dict, currency: str, marker: str | None = None) -> Offer | None:
+    dep_str = item.get("departure_at")
+    ret_str = item.get("return_at")
+    dep = _parse_dt(dep_str)
+    ret = _parse_dt(ret_str)
     price = item.get("price")
     if price is None or dep is None:
         return None
@@ -98,9 +129,11 @@ def _prices_to_offer(item: dict, currency: str) -> Offer | None:
         price_original=float(price),
         currency_original=currency,
         depart_date=dep,
+        depart_time=_parse_time(dep_str),
         return_date=ret,
+        return_time=_parse_time(ret_str),
         carrier=airline or None,
-        deep_link=item.get("link"),
+        deep_link=_abs_link(item.get("link"), marker),
         raw=item,
         collected_at=datetime.now(tz=UTC),
         freshness="cached",
@@ -122,9 +155,10 @@ class TravelpayoutsAdapter:
         max_cache_age_days=7,
     )
 
-    def __init__(self, token: str, client: RateLimitedClient) -> None:
+    def __init__(self, token: str, client: RateLimitedClient, marker: str | None = None) -> None:
         self._token = token
         self._client = client
+        self._marker = marker
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -169,18 +203,21 @@ class TravelpayoutsAdapter:
 
         # grouped_prices — 실패 시 전체 ok=False (Mod 4)
         try:
+            grouped_params: dict = {
+                "origin": req.origin,
+                "destination": req.destination,
+                "departure_at": month,
+                # Mod 3: return_at 제거 — 귀국일 필터가 다음 달로 넘어가는 항공권을 자른다
+                "currency": req.currency.lower(),  # Mod 1
+                "direct": "false",
+                "group_by": "departure_at",
+            }
+            if self._marker:
+                grouped_params["marker"] = self._marker
             grouped_resp = await self._client.get(
                 _GROUPED,
                 headers=self._headers(),
-                params={
-                    "origin": req.origin,
-                    "destination": req.destination,
-                    "departure_at": month,
-                    # Mod 3: return_at 제거 — 귀국일 필터가 다음 달로 넘어가는 항공권을 자른다
-                    "currency": req.currency.lower(),  # Mod 1
-                    "direct": "false",
-                    "group_by": "departure_at",
-                },
+                params=grouped_params,
             )
             grouped_resp.raise_for_status()
 
@@ -202,7 +239,7 @@ class TravelpayoutsAdapter:
                 if not _in_range(dep, ret, req):
                     continue
                 try:  # Mod 5: 행 단위 파싱 실패 격리
-                    o = _grouped_to_offer(key, item, currency)
+                    o = _grouped_to_offer(key, item, currency, self._marker)
                     if o:
                         offers_by_id[o.external_id] = o
                 except Exception:  # noqa: BLE001
@@ -227,6 +264,7 @@ class TravelpayoutsAdapter:
                     "one_way": "false",
                     "limit": 1000,
                     "page": 1,
+                    **({"marker": self._marker} if self._marker else {}),
                 },
             )
             prices_resp.raise_for_status()
@@ -244,7 +282,7 @@ class TravelpayoutsAdapter:
                 if not _in_range(dep, ret, req):
                     continue
                 try:  # Mod 5: 행 단위 파싱 실패 격리
-                    o = _prices_to_offer(item, prices_currency)
+                    o = _prices_to_offer(item, prices_currency, self._marker)
                     if o and o.external_id not in offers_by_id:
                         offers_by_id[o.external_id] = o
                 except Exception:  # noqa: BLE001

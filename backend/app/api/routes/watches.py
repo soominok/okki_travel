@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_token
@@ -15,8 +15,18 @@ from app.db import SessionLocal
 from app.engine.collector import collect_watch
 from app.models.price import Offer, PriceSnapshot
 from app.models.watch import Watch, WatchRun
-from app.schemas.watch import OfferOut, RunOut, SnapshotOut, WatchCreate, WatchPatch, WatchRead
+from app.schemas.watch import (
+    MonthlyMin,
+    OfferOut,
+    RunOut,
+    SnapshotOut,
+    WatchCreate,
+    WatchPatch,
+    WatchRead,
+    WatchStats,
+)
 from app.sources.registry import build_registry
+from app.utils.deep_links import build_deep_links
 
 router = APIRouter(prefix="/api/watches", tags=["watches"])
 _auth = Depends(require_token)
@@ -130,16 +140,54 @@ async def get_snapshots(
 @router.get("/{watch_id}/offers", response_model=list[OfferOut], dependencies=[_auth])
 async def get_offers(
     watch_id: uuid.UUID,
-    limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
+    watch = await db.get(Watch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+
+    # (source, external_id) 기준 가장 최근 수집된 것 하나씩만 반환
+    latest_subq = (
+        select(
+            Offer.source,
+            Offer.external_id,
+            func.max(Offer.collected_at).label("max_at"),
+        )
+        .where(Offer.watch_id == watch_id)
+        .group_by(Offer.source, Offer.external_id)
+        .subquery()
+    )
     result = await db.execute(
         select(Offer)
-        .where(Offer.watch_id == watch_id)
-        .order_by(desc(Offer.collected_at))
-        .limit(limit)
+        .join(
+            latest_subq,
+            and_(
+                Offer.source == latest_subq.c.source,
+                Offer.external_id == latest_subq.c.external_id,
+                Offer.collected_at == latest_subq.c.max_at,
+                Offer.watch_id == watch_id,
+            ),
+        )
+        .order_by(Offer.price_krw)
     )
-    return result.scalars().all()
+    offers = result.scalars().all()
+
+    # Watch params에서 딥링크 재료 추출 (flight 종류만)
+    params = watch.params
+    origin = params.get("origin") if isinstance(params, dict) else None
+    destination = params.get("destination") if isinstance(params, dict) else None
+    depart_from = params.get("depart_from") if isinstance(params, dict) else None
+
+    out_list: list[OfferOut] = []
+    for offer in offers:
+        out = OfferOut.model_validate(offer)
+        if origin and destination:
+            dep = str(offer.depart_date) if offer.depart_date else depart_from
+            ret = str(offer.return_date) if offer.return_date else None
+            if dep:
+                out.deep_links = build_deep_links(origin, destination, dep, ret)
+        out_list.append(out)
+    return out_list
 
 
 @router.get("/{watch_id}/runs", response_model=list[RunOut], dependencies=[_auth])
@@ -155,3 +203,43 @@ async def get_runs(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+@router.get("/{watch_id}/stats", response_model=WatchStats, dependencies=[_auth])
+async def get_stats(
+    watch_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    watch = await db.get(Watch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+
+    result = await db.execute(
+        text("""
+            SELECT
+                to_char(date_trunc('month', captured_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
+                MIN(min_price_krw) AS min_krw
+            FROM price_snapshots
+            WHERE watch_id = :watch_id
+            GROUP BY 1
+            ORDER BY 1
+        """),
+        {"watch_id": str(watch_id)},
+    )
+    rows = result.fetchall()
+
+    monthly = [MonthlyMin(month=r[0], min_krw=r[1]) for r in rows]
+    if monthly:
+        best = min(monthly, key=lambda x: x.min_krw)
+        overall_min: int | None = best.min_krw
+        overall_min_month: str | None = best.month
+    else:
+        overall_min = None
+        overall_min_month = None
+
+    return WatchStats(
+        monthly_min=monthly,
+        overall_min=overall_min,
+        overall_min_month=overall_min_month,
+        data_months=len(monthly),
+    )
